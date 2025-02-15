@@ -1068,6 +1068,18 @@ function getClosestArena(targetPosition: Vec3): Arena -- Remove this function wh
 			closestArena = arena
 		end
 	end
+
+	-- if the camera is placed in such a way that it is not leveled with any arena we loop again without limiting height
+	if closestArena == nil then
+		for _, arena in pairs(arenas) do
+			local distance = getDist(targetPosition, arena.position)
+			if distance < closestArenaDistance then
+				closestArenaDistance = distance
+				closestArena = arena
+			end
+		end
+	end
+
 	return closestArena
 end
 
