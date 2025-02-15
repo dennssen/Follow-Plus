@@ -405,6 +405,7 @@ local distanceLerpLabel = "Player/Ball Ratio"
 -- player
 local targetPlayer = nil
 local targetPlayerName = profile.targetPlayerName
+local previousTargetPlayerId = -1
 local targetPlayerId = -1
 local headPosition: Vec3 = Vec3.new(0, 0, 0)
 local headRotation: Quat = Quat.identity
@@ -632,6 +633,7 @@ function onGui()
 		listActive = true
 	end
 
+	previousTargetPlayerId = targetPlayerId
 	if listActive then
 		Gui.indent()
 		Gui.beginListBox("Player List")
@@ -1598,7 +1600,7 @@ function withPlayer(player: ReplayPlayer)
 	headRotation = player.head.rotation
 	headPosition = player.head.position
 
-	if previousCameraMode ~= cameraMode then
+	if previousCameraMode ~= cameraMode or previousTargetPlayerId ~= targetPlayerId then
 		toggleSmoothing(false, false)
 	elseif cameraMode ~= CameraMode.FirstPerson then
 		toggleSmoothing(true, true)
