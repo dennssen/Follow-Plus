@@ -354,6 +354,7 @@ camera.positionSmoothing = positionSmoothing
 local rotationSmoothing = 0.1
 camera.rotationSmoothing = rotationSmoothing
 camera.hideNearestHead = false
+local previousCameraMode: number = profile.cameraMode
 local cameraMode: number = profile.cameraMode
 local cameraModes = { "First Person", "Head Rotation", "Velocity Rotation", "Face the Ball" }
 
@@ -682,6 +683,7 @@ function onGui()
 	Gui.indent()
 	Gui.separatorText("Settings")
 
+	previousCameraMode = cameraMode
 	if Gui.beginCombo(cameraModeLabel, cameraModes[cameraMode]) then
 		for i = 1, #cameraModes do
 			if Gui.selectable(cameraModes[i], i == cameraMode) then
@@ -1445,7 +1447,6 @@ function firstPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat)
 	end]]
 	camera.position = position
 	camera.rotation = rotation
-	toggleSmoothing(false, false)
 end
 
 function thirdPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat, smartSwitch: boolean)
@@ -1474,8 +1475,6 @@ function thirdPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat, smar
 	camera.position = rotationPivotPosition(position, rotation, localRadius)
 	camera.hideNearestHead = false
 	camera:lookAt(position, gravityUpDirection)
-
-	toggleSmoothing(true, true)
 end
 
 function thirdPersonVelocity(position: Vec3, velocity: Vec3, rotation: Quat)
@@ -1499,8 +1498,6 @@ function thirdPersonVelocity(position: Vec3, velocity: Vec3, rotation: Quat)
 	camera.position = velocityPivotPosition(position, velocity, localRadius, false)
 	camera.hideNearestHead = false
 	camera:lookAt(position, gravityUpDirection)
-
-	toggleSmoothing(true, true)
 end
 
 function thirdPersonFacingBall(position: Vec3, offsetPosition: Vec3, rotation: Quat)
@@ -1524,8 +1521,6 @@ function thirdPersonFacingBall(position: Vec3, offsetPosition: Vec3, rotation: Q
 	camera.position = twoPointPivotPosition(position, ballPosition, localRadius)
 	camera.hideNearestHead = false
 	camera:lookAt(position, gravityUpDirection)
-
-	toggleSmoothing(true, true)
 end
 
 function withPlayer(player: ReplayPlayer)
@@ -1609,6 +1604,13 @@ function withPlayer(player: ReplayPlayer)
 
 	headRotation = player.head.rotation
 	headPosition = player.head.position
+
+	if previousCameraMode ~= cameraMode then
+		toggleSmoothing(false, false)
+	elseif cameraMode ~= CameraMode.FirstPerson then
+		toggleSmoothing(true, true)
+	end
+
 	if radius > 0 and cameraMode ~= CameraMode.FirstPerson then
 		if cameraMode == CameraMode.HeadRotation then
 			thirdPerson(headPosition, positionOffset, headRotation, true)
