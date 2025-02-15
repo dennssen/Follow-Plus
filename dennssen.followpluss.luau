@@ -406,7 +406,6 @@ local distanceLerpLabel = "Player/Ball Ratio"
 local targetPlayer = nil
 local targetPlayerName = profile.targetPlayerName
 local targetPlayerId = -1
-local targetPlayerIndex = nil
 local headPosition: Vec3 = Vec3.new(0, 0, 0)
 local headRotation: Quat = Quat.identity
 local playerVelocity = Vec3.zeroVector
@@ -471,7 +470,6 @@ local xMouse = Input.Key.MouseX
 local yMouse = Input.Key.MouseY
 
 function updateVariables(profileName)
-	targetPlayerIndex = nil
 	targetPlayerId = -1
 	targetPlayer = nil
 
@@ -645,14 +643,9 @@ function onGui()
 				isSelected = true
 			end
 
-			if i == targetPlayerIndex then
-				isSelected = true
-			end
-
 			if Gui.selectable(tostring(player.playerName) .. "[" .. tostring(player.playerId) .. "]", isSelected) then
 				targetPlayerName = player.playerName
 				targetPlayerId = player.playerId
-				targetPlayerIndex = i
 			end
 		end
 		Gui.endListBox()
@@ -1647,10 +1640,7 @@ function tick(dt)
 	deltaTime = dt
 	local frame = getReplayFrameFromIndex(readLocation)
 
-	if
-		#frame.players == 0
-		or (targetPlayerIndex == nil and targetPlayerId == -1 and (targetPlayerName == nil or targetPlayerName == ""))
-	then
+	if #frame.players == 0 or (targetPlayerId == -1 and (targetPlayerName == nil or targetPlayerName == "")) then
 		noPlayerOrbit(dt)
 		return
 	end
@@ -1664,13 +1654,6 @@ function tick(dt)
 		if targetPlayer then
 			targetPlayerId = targetPlayer.playerId
 		end
-	end
-
-	-- last effort, temporary?
-	if targetPlayer == nil and targetPlayerIndex ~= nil then
-		targetPlayer = frame.players[targetPlayerIndex]
-	else
-		targetPlayerIndex = nil
 	end
 
 	if targetPlayer == nil then
@@ -1720,9 +1703,6 @@ function onMessageReceived(messageTable)
 	-- targetPlayerId is a number used for getting the player you want to follow. If anything bigger than -1 this will be used instead of targetPlayerName if it finds a player with the corresponding ID.
 	if messageTable.targetPlayerId then
 		targetPlayerId = messageTable.targetPlayerId
-	end
-	if messageTable.targetPlayerIndex then
-		targetPlayerIndex = messageTable.targetPlayerIndex
 	end
 	-- cameraFOV is a number that sets the camera FOV, the number can be set between 40 and 179
 	if messageTable.cameraFOV then
