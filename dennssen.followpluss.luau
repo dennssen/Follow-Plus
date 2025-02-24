@@ -1,5 +1,5 @@
 -- Only used for display reasons
-local version: string = "1.5.6"
+local version: string = "1.5.7"
 alwaysTick = false
 metadata = {
 	name = "Follow Pluss",
