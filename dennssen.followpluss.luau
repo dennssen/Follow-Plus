@@ -754,7 +754,7 @@ function onGui()
 	end
 
 	cameraPositionOffset = Vec3Clamp(cameraPositionOffset, -1000, 1000)
-	Gui.setItemTooltip("The Cameras positional offset. Only applied in X")
+	Gui.setItemTooltip("The Cameras positional offset. Only applied in mode 'Head Rotation' and 'First Person'")
 
 	cameraEulerOffset = Gui.dragFloat3(cameraEulerOffsetLabel, cameraEulerOffset, 1, -math.huge, math.huge)
 	if not Gui.isItemActive() then
