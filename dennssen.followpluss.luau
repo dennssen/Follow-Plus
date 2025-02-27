@@ -763,11 +763,7 @@ function onGui()
 	end
 	Gui.setItemTooltip("The Cameras rotational offset. Only applied in mode 'Head Rotation'")
 
-	if
-		cameraMode == CameraMode.VelocityRotation
-		or cameraMode == CameraMode.FaceTheBall
-		or cameraMode == CameraMode.FirstPerson
-	then
+	if cameraMode == CameraMode.VelocityRotation or cameraMode == CameraMode.FaceTheBall then
 		Gui.endDisabled()
 	end
 
