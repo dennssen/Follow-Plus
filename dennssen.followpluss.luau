@@ -35,6 +35,12 @@ function stringToVec3(string: string): Vec3
 	return vec
 end
 
+function muteAll(mute: boolean, frame: ReplayFrame)
+	for _, player in frame.players do
+		Settings.mutePlayerByName(player.playerName, mute)
+	end
+end
+
 local function initializeProfiles()
 	local saveToConfig = false
 	local neededValues = {
@@ -54,6 +60,7 @@ local function initializeProfiles()
 		autoBall = false,
 		targetPlayerName = "",
 		cameraMode = 2,
+		muteSelf = false,
 	}
 
 	-- remove every value in the root of the config that isn't profiles or lastUsedProfile
@@ -106,6 +113,10 @@ local lastUsedProfile = config.lastUsedProfile
 local profile = config.profiles[lastUsedProfile]
 
 local deltaTime: number = 0
+
+-- VOIP
+local isSelfMuted = false
+local muteSelf = profile.muteSelf
 
 -- goal
 local goalPositionOffset = 3165
@@ -387,6 +398,7 @@ local playerIdInfo: string = ""
 -- labels
 local gameDataLabel = "Game Data"
 local nametagsLabel = "Nametags"
+local muteSelfLabel = "Mute Self"
 local targetPlayerNameLabel = "Follow Player"
 local cameraFOVLabel = "Field Of View"
 local positionSmoothingLabel = "Camera Smoothing"
@@ -473,6 +485,7 @@ local yMouse = Input.Key.MouseY
 function updateVariables(profileName)
 	targetPlayerId = -1
 	targetPlayer = nil
+	isSelfMuted = false
 
 	profile = config.profiles[profileName]
 	radius = profile.radius
@@ -482,6 +495,7 @@ function updateVariables(profileName)
 	cameraFOV = profile.fieldOfView
 	goalMode = profile.goalMode
 	showNameTags = profile.showNameTags
+	muteSelf = profile.muteSelf
 	threshold = profile.threshold
 	positionSmoothing = profile.positionSmoothing
 	autoGoalCam = profile.autoGoalCam
@@ -587,11 +601,14 @@ function onGui()
 	end
 	Gui.setItemTooltip("Where the camera gets the game data from.")
 
+	local frame = getReplayFrameFromIndex(readLocation)
+
 	if Gui.beginCombo("Profile", lastUsedProfile) then
 		local defaultKey = getKey(config.profiles["default"], config.profiles)
 		if Gui.selectable("default", defaultKey == lastUsedProfile) then
 			lastUsedProfile = defaultKey
 			updateVariables(lastUsedProfile)
+			muteAll(false, frame)
 			profile = config.profiles[lastUsedProfile]
 			config.lastUsedProfile = lastUsedProfile
 			saveConfig()
@@ -603,6 +620,7 @@ function onGui()
 			if Gui.selectable(key, key == lastUsedProfile) then
 				lastUsedProfile = key
 				updateVariables(lastUsedProfile)
+				muteAll(false, frame)
 				profile = config.profiles[lastUsedProfile]
 				config.lastUsedProfile = lastUsedProfile
 				saveConfig()
@@ -614,14 +632,18 @@ function onGui()
 
 	Gui.newLine()
 
-	local frame = getReplayFrameFromIndex(readLocation)
-
 	showNameTags = Gui.checkbox(nametagsLabel, showNameTags)
 	if not Gui.isItemActive() then
 		nametagsLabel = generateAsterisk("Nametags", showNameTags ~= profile.showNameTags)
 	end
-	Gui.setItemTooltip("enable/disable nametags for all players")
+	Gui.setItemTooltip("enable or disable nametags for all players")
 	camera.showNameTags = showNameTags
+
+	muteSelf = Gui.checkbox(muteSelfLabel, muteSelf)
+	if not Gui.isItemActive() then
+		muteSelfLabel = generateAsterisk("Mute Self", muteSelf ~= profile.muteSelf)
+	end
+	Gui.setItemTooltip("Enable or disable muting yourself or the player you are currently following")
 
 	targetPlayerName = Gui.inputText(targetPlayerNameLabel, targetPlayerName)
 	if not Gui.isItemActive() then
@@ -646,6 +668,8 @@ function onGui()
 			end
 
 			if Gui.selectable(tostring(player.playerName) .. "[" .. tostring(player.playerId) .. "]", isSelected) then
+				muteAll(false, frame)
+				isSelfMuted = false
 				targetPlayerName = player.playerName
 				targetPlayerId = player.playerId
 			end
@@ -873,6 +897,7 @@ function onGui()
 					distanceLerp = distanceLerp,
 					cameraMode = cameraMode,
 					showNameTags = showNameTags,
+					muteSelf = muteSelf,
 					readLocation = readLocation,
 					autoBall = autoBall,
 					autoBallThreshold = autoBallThreshold,
@@ -933,6 +958,7 @@ function onGui()
 				distanceLerp = distanceLerp,
 				cameraMode = cameraMode,
 				showNameTags = showNameTags,
+				muteSelf = muteSelf,
 				readLocation = readLocation,
 				autoBall = autoBall,
 				autoBallThreshold = autoBallThreshold,
@@ -1645,6 +1671,15 @@ function noPlayerOrbit(dt: number)
 	orbitRotation.z -= dt * orbitRotationSpeed
 end
 
+function configureVOIP(frame: ReplayFrame)
+	if muteSelf and not isSelfMuted then
+		isSelfMuted = Settings.mutePlayerByName(targetPlayer.playerName, muteSelf)
+	elseif not muteSelf and isSelfMuted then
+		muteAll(false, frame)
+		isSelfMuted = false
+	end
+end
+
 function tick(dt)
 	if not camera.isActive and not camera.isFollowed then
 		return
@@ -1686,6 +1721,7 @@ function tick(dt)
 	updateBallData(ball, dt)
 	updatePlayerData(targetPlayer)
 	withPlayer(targetPlayer)
+	configureVOIP(frame)
 end
 
 function onMessageReceived(messageTable)
