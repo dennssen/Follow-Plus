@@ -111,6 +111,9 @@ initializeProfiles()
 
 local lastUsedProfile = config.lastUsedProfile
 local profile = config.profiles[lastUsedProfile]
+if profile == nil then
+	profile = config.profiles["default"]
+end
 
 local deltaTime: number = 0
 
@@ -906,6 +909,7 @@ function onGui()
 					cameraPositionOffset = tostring(cameraPositionOffset),
 				}
 				lastUsedProfile = newProfileName
+				config.lastUsedProfile = lastUsedProfile
 				saveConfig()
 
 				profile = config.profiles[newProfileName]
@@ -925,6 +929,7 @@ function onGui()
 			deletingProfile = false
 			config.profiles[lastUsedProfile] = nil
 			lastUsedProfile = "default"
+			config.lastUsedProfile = lastUsedProfile
 			updateVariables(lastUsedProfile)
 			saveConfig()
 		end
