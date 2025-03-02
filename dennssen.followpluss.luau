@@ -3,7 +3,7 @@
 -- ^^ Settings.mutePlayerByName seems to be distance limited, therefore this is unreachable at the moment ^^
 
 -- 2: Searching in Player Field: (Make sure that when a player is selected that it shows all players in the list again)
--- 3: Add muteSelf and nametag to onMessageRecieved Function.
+-- 3: Add muteSelf and nametag to onMessageRecieved Function. DONE
 -- 4: Add a Cancel/Back button to Save as Config
 
 -- Only used for display reasons
@@ -1907,6 +1907,14 @@ function onMessageReceived(messageTable)
 	-- readLocation is a number representing where to retrive data from, anything above 0 is a replay file. Trying to access a replay file that doesn't exist does nothing.
 	if messageTable.readLocation then
 		readLocation = messageTable.readLocation
+	end
+	-- showNameTags is a boolean that decides whether or not to show name tags above players heads
+	if messageTable.showNameTags then
+		showNameTags = messageTable.showNameTags
+	end
+	-- muteSelf is a boolean that when set to true makes the camera unable to hear the followed player talk in game.
+	if messageTable.muteSelf then
+		muteSelf = messageTable.muteSelf
 	end
 	-- targetPlayerName is a string used for getting the player you want to follow. if this is empty or unable to find the name typed in it follows noone.
 	if messageTable.targetPlayerName then
