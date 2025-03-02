@@ -3,7 +3,7 @@
 -- ^^ Settings.mutePlayerByName seems to be distance limited, therefore this is unreachable at the moment ^^
 
 -- 2: Searching in Player Field: (Make sure that when a player is selected that it shows all players in the list again)
--- 3: Add muteSelf to onMessageRecieved Function.
+-- 3: Add muteSelf and nametag to onMessageRecieved Function.
 -- 4: Add a Cancel/Back button to Save as Config
 
 -- Only used for display reasons
@@ -698,6 +698,18 @@ function onGui()
 
 			if player.playerName == targetPlayerName then
 				isSelected = true
+			end
+
+			if targetPlayer then
+				if
+					targetPlayer.playerName ~= targetPlayerName and not string.find(player.playerName, targetPlayerName)
+				then
+					continue
+				end
+			else
+				if not string.find(player.playerName, targetPlayerName) then
+					continue
+				end
 			end
 
 			if Gui.selectable(tostring(player.playerName) .. "[" .. tostring(player.playerId) .. "]", isSelected) then
