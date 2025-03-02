@@ -1,3 +1,11 @@
+-- TODO:
+-- 1: Focused Arena Setting: (Feature that mutes everyone outside of the arena that the followed player is in if enabled)
+-- ^^ Settings.mutePlayerByName seems to be distance limited, therefore this is unreachable at the moment ^^
+
+-- 2: Searching in Player Field: (Make sure that when a player is selected that it shows all players in the list again)
+-- 3: Add muteSelf to onMessageRecieved Function.
+-- 4: Add a Cancel/Back button to Save as Config
+
 -- Only used for display reasons
 local version: string = "1.5.7"
 alwaysTick = false
@@ -35,9 +43,18 @@ function stringToVec3(string: string): Vec3
 	return vec
 end
 
-function muteAll(mute: boolean, frame: ReplayFrame)
+function muteAll(mute: boolean)
+	local frame = getGameData()
 	for _, player in frame.players do
 		Settings.mutePlayerByName(player.playerName, mute)
+	end
+end
+
+function muteList(mute: boolean, playerNames: { string })
+	for _, playerName in playerNames do
+		if not Settings.mutePlayerByName(playerName, mute) then
+			print(playerName)
+		end
 	end
 end
 
@@ -61,6 +78,7 @@ local function initializeProfiles()
 		targetPlayerName = "",
 		cameraMode = 2,
 		muteSelf = false,
+		focusedArena = false,
 	}
 
 	-- remove every value in the root of the config that isn't profiles or lastUsedProfile
@@ -120,6 +138,8 @@ local deltaTime: number = 0
 -- VOIP
 local isSelfMuted = false
 local muteSelf = profile.muteSelf
+local focusedArena = profile.focusedArena
+local lastFocusedArena = focusedArena
 
 -- goal
 local goalPositionOffset = 3165
@@ -402,6 +422,7 @@ local playerIdInfo: string = ""
 local gameDataLabel = "Game Data"
 local nametagsLabel = "Nametags"
 local muteSelfLabel = "Mute Self"
+local focusedArenaLabel = "Focused Arenas"
 local targetPlayerNameLabel = "Follow Player"
 local cameraFOVLabel = "Field Of View"
 local positionSmoothingLabel = "Camera Smoothing"
@@ -432,6 +453,9 @@ local TeamIndex = {
 	HomeTeam = 0,
 	AwayTeam = 1,
 }
+local lastServerPlayerList: { number } = {}
+local lastTeammatesList: { string } = {}
+local teammatesList: { string } = {}
 
 -- ball
 local ballPosition: Vec3 = Vec3.zeroVector
@@ -499,6 +523,7 @@ function updateVariables(profileName)
 	goalMode = profile.goalMode
 	showNameTags = profile.showNameTags
 	muteSelf = profile.muteSelf
+	focusedArena = profile.focusedArena
 	threshold = profile.threshold
 	positionSmoothing = profile.positionSmoothing
 	autoGoalCam = profile.autoGoalCam
@@ -611,7 +636,7 @@ function onGui()
 		if Gui.selectable("default", defaultKey == lastUsedProfile) then
 			lastUsedProfile = defaultKey
 			updateVariables(lastUsedProfile)
-			muteAll(false, frame)
+			muteAll(false)
 			profile = config.profiles[lastUsedProfile]
 			config.lastUsedProfile = lastUsedProfile
 			saveConfig()
@@ -623,7 +648,7 @@ function onGui()
 			if Gui.selectable(key, key == lastUsedProfile) then
 				lastUsedProfile = key
 				updateVariables(lastUsedProfile)
-				muteAll(false, frame)
+				muteAll(false)
 				profile = config.profiles[lastUsedProfile]
 				config.lastUsedProfile = lastUsedProfile
 				saveConfig()
@@ -648,6 +673,12 @@ function onGui()
 	end
 	Gui.setItemTooltip("Enable or disable muting yourself or the player you are currently following")
 
+	focusedArena = Gui.checkbox(focusedArenaLabel, focusedArena)
+	if not Gui.isItemActive() then
+		focusedArenaLabel = generateAsterisk("Focused Arena", focusedArena ~= profile.focusedArena)
+	end
+	Gui.setItemTooltip("Mutes all Players OUTSIDE of the Arena the Followed Player is currently in")
+
 	targetPlayerName = Gui.inputText(targetPlayerNameLabel, targetPlayerName)
 	if not Gui.isItemActive() then
 		targetPlayerNameLabel = generateAsterisk("Follow Player", targetPlayerName ~= profile.targetPlayerName)
@@ -671,8 +702,10 @@ function onGui()
 			end
 
 			if Gui.selectable(tostring(player.playerName) .. "[" .. tostring(player.playerId) .. "]", isSelected) then
-				muteAll(false, frame)
+				muteAll(false)
 				isSelfMuted = false
+				teammatesList = {}
+				lastTeammatesList = {}
 				targetPlayerName = player.playerName
 				targetPlayerId = player.playerId
 			end
@@ -901,6 +934,7 @@ function onGui()
 					cameraMode = cameraMode,
 					showNameTags = showNameTags,
 					muteSelf = muteSelf,
+					focusedArena = focusedArena,
 					readLocation = readLocation,
 					autoBall = autoBall,
 					autoBallThreshold = autoBallThreshold,
@@ -964,6 +998,7 @@ function onGui()
 				cameraMode = cameraMode,
 				showNameTags = showNameTags,
 				muteSelf = muteSelf,
+				focusedArena = focusedArena,
 				readLocation = readLocation,
 				autoBall = autoBall,
 				autoBallThreshold = autoBallThreshold,
@@ -1185,7 +1220,7 @@ function registeredOffsetHit(position: Vec3, offset: Vec3): Vec3
 	return offset
 end
 
-function updatePlayerData(player: ReplayPlayer)
+function updatePlayerData(player: ReplayPlayer, frame: ReplayFrame)
 	playerVelocity = player.velocity
 	isLocalPlayer = player.isLocalPlayer
 	playerNameInfo = player.playerName
@@ -1195,6 +1230,8 @@ function updatePlayerData(player: ReplayPlayer)
 		teamIndex = player.teamIndex
 		arena = getClosestArena(player.root.position)
 	end
+
+	teamLists(frame)
 end
 
 function mouseRotationOffset()
@@ -1241,6 +1278,31 @@ function updateBallData(ball: ReplayBall, seconds: number)
 	ballRotation = ball.transform.rotation
 	ballArena = ball.arena
 	ballVelocity = ball.velocity
+end
+
+function teamLists(frame: ReplayFrame)
+	local tempTeamList: { string } = {}
+	if teamIndex == TeamIndex.NoTeam then
+		lastTeammatesList = teammatesList
+		teammatesList = {}
+		return
+	end
+
+	for _, player in frame.players do
+		if player.teamIndex == TeamIndex.NoTeam then
+			continue
+		end
+		local closestArena = getClosestArena(player.root.position)
+
+		if closestArena.name ~= arena.name then
+			continue
+		end
+
+		table.insert(tempTeamList, player.playerName)
+	end
+
+	lastTeammatesList = teammatesList
+	teammatesList = tempTeamList
 end
 
 function calculateAcceleration(currentVelocity, dt)
@@ -1676,13 +1738,103 @@ function noPlayerOrbit(dt: number)
 	orbitRotation.z -= dt * orbitRotationSpeed
 end
 
-function configureVOIP(frame: ReplayFrame)
-	if muteSelf and not isSelfMuted then
-		isSelfMuted = Settings.mutePlayerByName(targetPlayer.playerName, muteSelf)
-	elseif not muteSelf and isSelfMuted then
-		muteAll(false, frame)
+function configureVOIP()
+	local frame = getGameData() -- always do VOIP on live data | Replays don't have VOIP
+
+	if not focusedArena and lastFocusedArena then
+		-- focused arena got turned off
+		print("focused arena off")
+		if muteSelf then
+			local toMuteList = frame.players
+			table.remove(toMuteList, table.find(toMuteList, targetPlayer.playerName))
+			muteList(false, toMuteList)
+		else
+			muteAll(false)
+		end
+	end
+
+	if not muteSelf and isSelfMuted then
+		muteAll(false)
 		isSelfMuted = false
 	end
+
+	if focusedArena and (#lastTeammatesList == 0 and #teammatesList > 0) then
+		-- entered arena
+		print("entered arena")
+		local toMuteList: { string } = frame.players
+		for _, playerName in teammatesList do
+			table.remove(toMuteList, table.find(toMuteList, playerName))
+		end
+
+		if muteSelf then
+			table.remove(teammatesList, table.find(teammatesList, targetPlayer.playerName))
+			table.insert(toMuteList, targetPlayer.playerName)
+		end
+
+		muteList(true, toMuteList)
+		muteList(false, teammatesList)
+	end
+
+	if focusedArena and (#teammatesList == 0 and #lastTeammatesList > 0) then
+		-- left arena
+		print("left arena")
+		if muteSelf then
+			local toMuteList = frame.players
+			table.remove(toMuteList, table.find(toMuteList, targetPlayer.playerName))
+			muteList(false, toMuteList)
+		else
+			muteAll(false)
+		end
+	end
+
+	if focusedArena and teamIndex ~= TeamIndex.NoTeam and #lastServerPlayerList > 0 then
+		for _, currentPlayer in frame.players do
+			local tryFindPlayer = table.find(lastServerPlayerList, currentPlayer.playerId)
+
+			if tryFindPlayer == nil and currentPlayer.playerName ~= tostring(currentPlayer.playerId) then
+				-- this is spamming try string lists with playernames instead of ReplayPlayer lists
+				print(`new server player: {currentPlayer.playerName}`)
+				-- new player joined server
+				-- possibly won't work while the new players name is their playerID
+				Settings.mutePlayerByName(currentPlayer.playerName, true)
+			end
+		end
+	end
+
+	if muteSelf and not isSelfMuted then
+		isSelfMuted = Settings.mutePlayerByName(targetPlayer.playerName, muteSelf)
+	end
+
+	for _, teammateName in teammatesList do
+		local tryFindTeammate = table.find(lastTeammatesList, teammateName)
+
+		if focusedArena and tryFindTeammate == nil then
+			-- new player joined arena
+			print(`arena join`)
+			Settings.mutePlayerByName(teammateName, false)
+		end
+	end
+
+	for _, teammateName in lastTeammatesList do
+		local tryFindLastTeammate = table.find(teammatesList, teammateName)
+
+		if focusedArena and tryFindLastTeammate == nil then
+			-- player left the arena
+			print(`arena leave`)
+			Settings.mutePlayerByName(teammateName, true)
+		end
+	end
+
+	lastServerPlayerList = {}
+	for _, player in frame.players do
+		-- ignore newely joined players that don't have their name yet as they can't be muted (maybe, better safe than sorry)
+		if player.playerName == tostring(player.playerId) then
+			continue
+		end
+
+		table.insert(lastServerPlayerList, player.playerId)
+	end
+	lastFocusedArena = focusedArena
 end
 
 function tick(dt)
@@ -1724,9 +1876,9 @@ function tick(dt)
 
 	gravityUpDirection = targetPlayer.root.rotation:getUpVector()
 	updateBallData(ball, dt)
-	updatePlayerData(targetPlayer)
+	updatePlayerData(targetPlayer, frame)
 	withPlayer(targetPlayer)
-	configureVOIP(frame)
+	configureVOIP()
 end
 
 function onMessageReceived(messageTable)
