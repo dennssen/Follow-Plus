@@ -138,7 +138,7 @@ local deltaTime: number = 0
 -- VOIP
 local isSelfMuted = false
 local muteSelf = profile.muteSelf
-local focusedArena = profile.focusedArena
+local focusedArena = false
 local lastFocusedArena = focusedArena
 
 -- goal
@@ -523,7 +523,6 @@ function updateVariables(profileName)
 	goalMode = profile.goalMode
 	showNameTags = profile.showNameTags
 	muteSelf = profile.muteSelf
-	focusedArena = profile.focusedArena
 	threshold = profile.threshold
 	positionSmoothing = profile.positionSmoothing
 	autoGoalCam = profile.autoGoalCam
@@ -673,11 +672,11 @@ function onGui()
 	end
 	Gui.setItemTooltip("Enable or disable muting yourself or the player you are currently following")
 
-	focusedArena = Gui.checkbox(focusedArenaLabel, focusedArena)
+	--[[focusedArena = Gui.checkbox(focusedArenaLabel, focusedArena)
 	if not Gui.isItemActive() then
 		focusedArenaLabel = generateAsterisk("Focused Arena", focusedArena ~= profile.focusedArena)
 	end
-	Gui.setItemTooltip("Mutes all Players OUTSIDE of the Arena the Followed Player is currently in")
+	Gui.setItemTooltip("Mutes all Players OUTSIDE of the Arena the Followed Player is currently in")]]
 
 	targetPlayerName = Gui.inputText(targetPlayerNameLabel, targetPlayerName)
 	if not Gui.isItemActive() then
@@ -934,7 +933,6 @@ function onGui()
 					cameraMode = cameraMode,
 					showNameTags = showNameTags,
 					muteSelf = muteSelf,
-					focusedArena = focusedArena,
 					readLocation = readLocation,
 					autoBall = autoBall,
 					autoBallThreshold = autoBallThreshold,
@@ -998,7 +996,6 @@ function onGui()
 				cameraMode = cameraMode,
 				showNameTags = showNameTags,
 				muteSelf = muteSelf,
-				focusedArena = focusedArena,
 				readLocation = readLocation,
 				autoBall = autoBall,
 				autoBallThreshold = autoBallThreshold,
