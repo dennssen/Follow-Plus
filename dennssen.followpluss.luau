@@ -7,7 +7,7 @@
 -- 4: Add a Cancel/Back button to Save as Config
 
 -- Only used for display reasons
-local version: string = "1.5.7"
+local version: string = "1.6.0"
 alwaysTick = false
 metadata = {
 	name = "Follow Pluss",
@@ -702,7 +702,8 @@ function onGui()
 
 			if targetPlayer then
 				if
-					targetPlayer.playerName ~= targetPlayerName and not string.find(player.playerName, targetPlayerName)
+					targetPlayer.playerName ~= targetPlayerName
+					and not string.find(string.lower(player.playerName), string.lower(targetPlayerName))
 				then
 					continue
 				end
