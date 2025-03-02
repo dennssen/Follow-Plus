@@ -1,11 +1,3 @@
--- TODO:
--- 1: Focused Arena Setting: (Feature that mutes everyone outside of the arena that the followed player is in if enabled)
--- ^^ Settings.mutePlayerByName seems to be distance limited, therefore this is unreachable at the moment ^^
-
--- 2: Searching in Player Field: (Make sure that when a player is selected that it shows all players in the list again)
--- 3: Add muteSelf and nametag to onMessageRecieved Function. DONE
--- 4: Add a Cancel/Back button to Save as Config
-
 -- Only used for display reasons
 local version: string = "1.6.0"
 alwaysTick = false
@@ -923,7 +915,11 @@ function onGui()
 	end
 
 	if savingNewProfile then
-		if Gui.button("Confirm") then
+		if Gui.button(`{Icon.ArrowLeft}##New Profile`) then
+			savingNewProfile = false
+		end
+		Gui.sameLine()
+		if Gui.button(`{Icon.Check}##New Profile`) then
 			if newProfileName == "" or newProfileName == nil then
 				confirmationText = "Profile name cannot be empty"
 			elseif string.match(newProfileName, "^[%a]+$") == nil then
