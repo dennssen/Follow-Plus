@@ -8,6 +8,13 @@ metadata = {
 	defaultKeybind = "F",
 }
 
+local CameraMode = {
+	FirstPerson = 1,
+	HeadRotation = 2,
+	VelocityRotation = 3,
+	FaceTheBall = 4,
+}
+
 -- This is what chatGPT was made for
 local function parseBallJSON(str)
 	-- Table to store the parsed data
@@ -70,6 +77,10 @@ local function initializeProfiles()
 		targetPlayerName = "",
 		cameraMode = 2,
 		muteSelf = false,
+		gestureControls = false,
+		forwardGestureMode = CameraMode.VelocityRotation,
+		upGestureMode = CameraMode.FaceTheBall,
+		backwardsGestureMode = CameraMode.HeadRotation,
 		focusedArena = false,
 	}
 
@@ -383,13 +394,7 @@ camera.hideNearestHead = false
 local previousCameraMode: number = profile.cameraMode
 local cameraMode: number = profile.cameraMode
 local cameraModes = { "First Person", "Head Rotation", "Velocity Rotation", "Face the Ball" }
-
-local CameraMode = {
-	FirstPerson = 1,
-	HeadRotation = 2,
-	VelocityRotation = 3,
-	FaceTheBall = 4,
-}
+local gestureModes = { "Head Rotation", "Velocity Rotation", "Face the Ball" }
 
 local cameraEulerOffset: Vec3 = stringToVec3(profile.cameraEulerOffset)
 local cameraPositionOffset: Vec3 = Vec3.zeroVector
@@ -423,6 +428,10 @@ local radiusLabel = "Radius"
 local thresholdLabel = "Smart Switch Distance"
 local cameraEulerOffsetLabel = "Camera Rotation Offset"
 local cameraPositionOffsetLabel = "Camera Position Offset"
+local gestureControlsLabel = "Enabled"
+local forwardGestureModeLabel = "Forward Mode"
+local upGestureModeLabel = "Up Mode"
+local backwardsGestureModeLabel = "Backward Mode"
 local autoBallLabel = "Enabled"
 local autoBallThresholdLabel = "Toggle Speed (m/s)"
 local ballCamGoalModeLabel = "Ball Goal Mode"
@@ -450,6 +459,12 @@ local lastTeammatesList: { string } = {}
 local teammatesList: { string } = {}
 
 -- grabbing
+local gestureControls: boolean = profile.gestureControls
+
+local forwardGestureMode: number = profile.forwardGestureMode
+local upGestureMode: number = profile.upGestureMode
+local backwardsGestureMode: number = profile.backwardsGestureMode
+
 local leftHandGrabbing: boolean = false
 local previousLeftHandGrabbing: boolean = false
 local rightHandGrabbing: boolean = false
@@ -870,6 +885,65 @@ function onGui()
 	end
 
 	Gui.newLine()
+	if Gui.collapsingHeader("Gesture Controls") then
+		Gui.indent()
+		gestureControls = Gui.checkbox(gestureControlsLabel .. "##3", gestureControls)
+		if not Gui.isItemActive() then
+			gestureControlsLabel = generateAsterisk("Enabled", gestureControls ~= profile.gestureControls)
+		end
+		Gui.setItemTooltip([[
+Be able to grab the camera and throw it to change modes
+	- Grab the camera with grip and trigger behind your head
+	- Let go without throwing for First Person]])
+		if gestureControls then
+			if Gui.beginCombo(forwardGestureModeLabel, gestureModes[forwardGestureMode - 1]) then
+				for i = 1, #gestureModes do
+					if Gui.selectable(gestureModes[i], i == forwardGestureMode - 1) then
+						forwardGestureMode = i + 1
+					end
+				end
+				Gui.endCombo()
+			end
+			if not Gui.isItemActive() then
+				forwardGestureModeLabel =
+					generateAsterisk("Forward Mode", forwardGestureMode ~= profile.forwardGestureMode)
+			end
+			forwardGestureMode = math.clamp(forwardGestureMode, 1, #cameraModes)
+			Gui.setItemTooltip("What Mode to change to when Throwing the Camera forward")
+
+			if Gui.beginCombo(upGestureModeLabel, gestureModes[upGestureMode - 1]) then
+				for i = 1, #gestureModes do
+					if Gui.selectable(gestureModes[i], i == upGestureMode - 1) then
+						upGestureMode = i + 1
+					end
+				end
+				Gui.endCombo()
+			end
+			if not Gui.isItemActive() then
+				upGestureModeLabel = generateAsterisk("Up Mode", upGestureMode ~= profile.upGestureMode)
+			end
+			upGestureMode = math.clamp(upGestureMode, 1, #cameraModes)
+			Gui.setItemTooltip("What Mode to change to when Throwing the Camera up")
+
+			if Gui.beginCombo(backwardsGestureModeLabel, gestureModes[backwardsGestureMode - 1]) then
+				for i = 1, #gestureModes do
+					if Gui.selectable(gestureModes[i], i == backwardsGestureMode - 1) then
+						backwardsGestureMode = i + 1
+					end
+				end
+				Gui.endCombo()
+			end
+			if not Gui.isItemActive() then
+				backwardsGestureModeLabel =
+					generateAsterisk("Backward Mode", backwardsGestureMode ~= profile.backwardsGestureMode)
+			end
+			backwardsGestureMode = math.clamp(backwardsGestureMode, 1, #cameraModes)
+			Gui.setItemTooltip("What Mode to change to when Throwing the Camera backward")
+		end
+		Gui.unindent()
+	end
+
+	Gui.newLine()
 	Gui.separatorText("Auto Cameras")
 
 	if Gui.collapsingHeader("Auto Shooting Camera") then
@@ -980,6 +1054,10 @@ function onGui()
 					cameraMode = cameraMode,
 					showNameTags = showNameTags,
 					muteSelf = muteSelf,
+					gestureControls = gestureControls,
+					forwardGestureMode = forwardGestureMode,
+					upGestureMode = upGestureMode,
+					backwardsGestureMode = backwardsGestureMode,
 					readLocation = readLocation,
 					autoBall = autoBall,
 					autoBallThreshold = autoBallThreshold,
@@ -1043,6 +1121,10 @@ function onGui()
 				cameraMode = cameraMode,
 				showNameTags = showNameTags,
 				muteSelf = muteSelf,
+				gestureControls = gestureControls,
+				forwardGestureMode = forwardGestureMode,
+				upGestureMode = upGestureMode,
+				backwardsGestureMode = backwardsGestureMode,
 				readLocation = readLocation,
 				autoBall = autoBall,
 				autoBallThreshold = autoBallThreshold,
@@ -1401,6 +1483,7 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 		if releaseTimers.left < maxLetGoTime then
 			if throwVelocity:length() < 0.1 then
 				throwVelocity = Vec3.zeroVector
+				releaseTimers.left = maxLetGoTime + deltaTime -- No throw, end instantly
 			end
 			local leftHandTransform = Transform.identity
 			leftHandTransform.position = Vec3.lerp(
@@ -1458,6 +1541,7 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 			local rightHandTransform = Transform.identity
 			if throwVelocity:length() < 0.1 then
 				throwVelocity = Vec3.zeroVector
+				releaseTimers.right = maxLetGoTime + deltaTime -- No throw, end instantly
 			end
 			rightHandTransform.position = Vec3.lerp(
 				rightHandPosition,
@@ -1862,7 +1946,7 @@ function withPlayer(player: ReplayPlayer)
 	local distance = 750
 
 	-- check for gesture controls
-	if true then
+	if gestureControls then
 		-- Check for camera grab
 		local grabHand: Transform? = isGrabbingCamera(player)
 		if grabHand ~= nil then
