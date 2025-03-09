@@ -1,5 +1,5 @@
 -- Only used for display reasons
-local version: string = "1.6.0"
+local version: string = "1.7.0"
 alwaysTick = false
 metadata = {
 	name = "Follow Pluss",
@@ -448,6 +448,43 @@ local TeamIndex = {
 local lastServerPlayerList: { number } = {}
 local lastTeammatesList: { string } = {}
 local teammatesList: { string } = {}
+
+-- grabbing
+local leftHandGrabbing: boolean = false
+local previousLeftHandGrabbing: boolean = false
+local rightHandGrabbing: boolean = false
+local previousRightHandGrabbing: boolean = false
+
+local throwVelocity: Vec3 = Vec3.zeroVector
+local lastGrabPosition: Vec3 = Vec3.zeroVector
+
+local grabTimers = {
+	left = 0,
+	right = 0,
+}
+
+local releaseTimers = {
+	left = 0,
+	right = 0,
+}
+
+local maxGrabTime: number = 0.25
+local maxLetGoTime: number = 1
+
+local HandPose = {
+	Neutral = 0, -- Doesn't work
+	Flat = 1, -- Hand on ground and not grabbing
+	Closed = 2, -- Doesn't work
+	GrabBall = 3, -- Hold ball
+	Horns = 4, -- Doesn't work
+	OK = 5, -- Doesn't work
+	Peace = 6, -- Doesn't work
+	Point = 7, -- Doesn't work
+	Shaka = 8, -- Doesn't work
+	ThumbsUp = 9, -- Doesn't work
+	FingerGun = 10, -- Doesn't work
+	MAX = 11, -- When not Flat or Holding ball
+}
 
 -- ball
 local ballPosition: Vec3 = Vec3.zeroVector
@@ -1126,6 +1163,16 @@ function getDist(point1: Vec3, point2: Vec3): number
 	return math.sqrt(x + y + z)
 end
 
+function decodePoseBits(poseBits)
+	return {
+		ThumbDown = bit32.band(poseBits, 1) ~= 0, -- True if thumb on face of controller (Touch sensor)
+		TriggerDown = bit32.band(poseBits, bit32.lshift(1, 1)) ~= 0, -- True if Trigger is pressed down
+		TriggerPoint = bit32.band(poseBits, bit32.lshift(1, 2)) ~= 0, -- True if finger is not on trigger (Touch sensor)
+		GripDown = bit32.band(poseBits, bit32.lshift(1, 3)) ~= 0, -- True if Grip is pressed down
+		FullHandPoseOverride = bit32.rshift(poseBits, 4) % 16,
+	}
+end
+
 function getClosestArena(targetPosition: Vec3): Arena -- Remove this function when/if we get the arena from the player
 	local closestArenaDistance = math.huge
 	local closestArena = nil
@@ -1309,6 +1356,117 @@ function teamLists(frame: ReplayFrame)
 
 	lastTeammatesList = teammatesList
 	teammatesList = tempTeamList
+end
+
+function isGrabbingCamera(player: ReplayPlayer): Transform?
+	local leftHandPosition = player.root.position + player.root.rotation:rotateVector(player.leftHand.position)
+	local leftPoseFlags = decodePoseBits(player.leftHandPosebits)
+	local rightHandPosition = player.root.position + player.root.rotation:rotateVector(player.rightHand.position)
+	local rightPoseFlags = decodePoseBits(player.rightHandPosebits)
+
+	-- Left hand grab logic
+	if
+		not leftHandGrabbing
+		and player.head.rotation:getForwardVector():dot(getForward(player.head.position, leftHandPosition)) < -0.2
+		and leftPoseFlags.GripDown
+		and leftPoseFlags.TriggerDown
+	then
+		grabTimers.left += deltaTime
+		if grabTimers.left >= 0.2 then
+			leftHandGrabbing = true
+			releaseTimers.left = 0
+		end
+	else
+		grabTimers.left = 0
+	end
+
+	if leftHandGrabbing and (not leftPoseFlags.GripDown or not leftPoseFlags.TriggerDown) then
+		leftHandGrabbing = false
+	end
+
+	if previousLeftHandGrabbing and leftHandGrabbing then
+		local leftHandRotation: Quat = player.root.rotation * player.leftHand.rotation
+		local leftHandTransform = Transform.identity
+		leftHandTransform.position = leftHandPosition
+		leftHandTransform.rotation = leftHandRotation
+
+		throwVelocity = lastGrabPosition - leftHandPosition
+
+		lastGrabPosition = leftHandPosition
+
+		return leftHandTransform
+	elseif previousLeftHandGrabbing and not leftHandGrabbing then
+		if releaseTimers.left < maxLetGoTime then
+			local leftHandTransform = Transform.identity
+			leftHandTransform.position = Vec3.lerp(
+				leftHandPosition,
+				leftHandPosition + (throwVelocity * -1000),
+				releaseTimers.left / maxLetGoTime
+			)
+			leftHandTransform.rotation = Quat.fromXZ(throwVelocity:normalize(), player.head.rotation:getUpVector())
+
+			releaseTimers.left += deltaTime
+
+			return leftHandTransform
+		end
+	end
+
+	-- Right hand grab logic
+	if
+		not rightHandGrabbing
+		and player.head.rotation:getForwardVector():dot(getForward(player.head.position, rightHandPosition)) < -0.2
+		and rightPoseFlags.GripDown
+		and rightPoseFlags.TriggerDown
+	then
+		grabTimers.right += deltaTime
+		if grabTimers.right >= maxGrabTime then
+			rightHandGrabbing = true
+			releaseTimers.right = 0
+		end
+	else
+		grabTimers.right = 0
+	end
+
+	if rightHandGrabbing and (not rightPoseFlags.GripDown or not rightPoseFlags.TriggerDown) then
+		rightHandGrabbing = false
+	end
+
+	if previousRightHandGrabbing and rightHandGrabbing then
+		local rightHandRotation: Quat = player.root.rotation * player.rightHand.rotation
+		local rightHandTransform = Transform.identity
+		rightHandTransform.position = rightHandPosition
+		rightHandTransform.rotation = rightHandRotation
+
+		throwVelocity = lastGrabPosition - rightHandPosition
+
+		lastGrabPosition = rightHandPosition
+
+		return rightHandTransform
+	elseif previousRightHandGrabbing and not rightHandGrabbing then
+		if releaseTimers.right < maxLetGoTime then
+			local rightHandTransform = Transform.identity
+			rightHandTransform.position = Vec3.lerp(
+				rightHandPosition,
+				rightHandPosition + (throwVelocity * -1000),
+				releaseTimers.right / maxLetGoTime
+			)
+			rightHandTransform.rotation = Quat.fromXZ(throwVelocity:normalize(), player.head.rotation:getUpVector())
+
+			releaseTimers.right += deltaTime
+
+			return rightHandTransform
+		end
+	end
+
+	previousLeftHandGrabbing = leftHandGrabbing
+	previousRightHandGrabbing = rightHandGrabbing
+
+	return nil
+end
+
+function grabbingCamera(player: ReplayPlayer, grabHand: Transform)
+	camera.position = grabHand.position
+	camera.rotation = grabHand.rotation
 end
 
 function calculateAcceleration(currentVelocity, dt)
@@ -1541,6 +1699,7 @@ end
 
 function firstPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat)
 	if offsetPosition ~= nil then
+		offsetPosition = rotation:rotateVector(offsetPosition)
 		offsetPosition = registeredOffsetHit(position, offsetPosition)
 		position += offsetPosition
 	end
@@ -1556,6 +1715,7 @@ end
 
 function thirdPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat, smartSwitch: boolean)
 	if offsetPosition ~= nil then
+		offsetPosition = rotation:rotateVector(offsetPosition)
 		offsetPosition = registeredOffsetHit(position, offsetPosition)
 		position += offsetPosition
 	end
@@ -1629,24 +1789,15 @@ function thirdPersonFacingBall(position: Vec3, offsetPosition: Vec3, rotation: Q
 end
 
 function withPlayer(player: ReplayPlayer)
-	local positionOffset = Vec3.zeroVector
-	local faceTheBallOffset = Vec3.new(-100, 0, 50)
 	local homeGoal = arena.homeGoal
 	local awayGoal = arena.awayGoal
 	local distance = 750
 
-	local forward = headRotation:getForwardVector()
-	local right = headRotation:getRightVector()
-	local up = headRotation:getUpVector()
-
-	local faceTheBallCalculatedOffset = (forward * faceTheBallOffset.x)
-		+ (right * faceTheBallOffset.y)
-		+ (up * faceTheBallOffset.z)
-
-	if cameraPositionOffset ~= Vec3.zeroVector then
-		positionOffset = (forward * cameraPositionOffset.x)
-			+ (right * cameraPositionOffset.y)
-			+ (up * cameraPositionOffset.z)
+	-- Check for camera grab
+	local grabHand: Transform? = isGrabbingCamera(player)
+	if grabHand ~= nil then
+		grabbingCamera(player, grabHand)
+		return
 	end
 
 	if autoGoalCam and not ballTarget then
@@ -1718,18 +1869,18 @@ function withPlayer(player: ReplayPlayer)
 
 	if radius > 0 and cameraMode ~= CameraMode.FirstPerson then
 		if cameraMode == CameraMode.HeadRotation then
-			thirdPerson(headPosition, positionOffset, headRotation, true)
+			thirdPerson(headPosition, cameraPositionOffset, headRotation, true)
 		elseif cameraMode == CameraMode.VelocityRotation then
 			thirdPersonVelocity(headPosition, player.velocity, headRotation)
 		elseif cameraMode == CameraMode.FaceTheBall then
 			if teamIndex ~= TeamIndex.NoTeam then
-				thirdPersonFacingBall(headPosition, faceTheBallCalculatedOffset, headRotation)
+				thirdPersonFacingBall(headPosition, headRotation:rotateVector(Vec3.new(-100, 0, 50)), headRotation)
 			else
-				thirdPerson(headPosition, positionOffset, headRotation, false)
+				thirdPerson(headPosition, cameraPositionOffset, headRotation, false)
 			end
 		end
 	else
-		firstPerson(headPosition, positionOffset, headRotation * QuatFromVec3(cameraEulerOffset))
+		firstPerson(headPosition, cameraPositionOffset, headRotation * QuatFromVec3(cameraEulerOffset))
 	end
 end
 
@@ -1976,3 +2127,19 @@ function onMessageReceived(messageTable)
 		camera.hideNearestHead = messageTable.hideNearestHead
 	end
 end
+
+-- Gesture controls:
+--[[
+	Toggleable option in the gui
+	Grab the camera by holding your hand behind your back and pressing the (lower face button and trigger) or (grip and trigger)
+	Let go off the camera near your head (with low velocity) to make it go to First Person mode
+	Throwing the camera in directions: Up, Forwards and Backwards switches to different third person modes.
+	For example:
+	- Backwards switches to Head Rotation
+	- Upwards switches to Face the Ball
+	- Forwards switches to Velocity Rotation
+	These are very logical default values, but i think making it configurable in the GUI would be perfect
+
+	Perhaps a new camera mode that lets you hold the camera like a go pro.
+	Then do a swipe gesture to switch between selfie and away cam
+]]
