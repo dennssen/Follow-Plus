@@ -8,11 +8,16 @@ metadata = {
 	defaultKeybind = "F",
 }
 
+-- TODO:
+-- Left Handed Toggle for Hand Held in GUI
+-- Flip Gesture For Hande Held mode
+
 local CameraMode = {
 	FirstPerson = 1,
 	HeadRotation = 2,
 	VelocityRotation = 3,
 	FaceTheBall = 4,
+	HandHeld = 5,
 }
 
 -- This is what chatGPT was made for
@@ -393,13 +398,14 @@ camera.rotationSmoothing = rotationSmoothing
 camera.hideNearestHead = false
 local previousCameraMode: number = profile.cameraMode
 local cameraMode: number = profile.cameraMode
-local cameraModes = { "First Person", "Head Rotation", "Velocity Rotation", "Face the Ball" }
+local cameraModes = { "First Person", "Head Rotation", "Velocity Rotation", "Face the Ball", "Hand Held" }
 local gestureModes = { "Head Rotation", "Velocity Rotation", "Face the Ball" }
 
 local cameraEulerOffset: Vec3 = stringToVec3(profile.cameraEulerOffset)
 local cameraPositionOffset: Vec3 = Vec3.zeroVector
 local hit: RayHit
 local distance = 0
+local handHeldFlip = false
 
 local gravityUpDirection: Vec3 = Vec3.zeroVector
 
@@ -1450,15 +1456,20 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 	-- Left hand grab logic
 	if
 		not leftHandGrabbing
-		and player.head.rotation:getForwardVector():dot(getForward(player.head.position, leftHandPosition)) < -0.2
 		and leftPoseFlags.GripDown
 		and leftPoseFlags.TriggerDown
 		and leftPoseFlags.FullHandPoseOverride ~= HandPose.GrabBall
 	then
-		grabTimers.left += deltaTime
-		if grabTimers.left >= 0.2 then
-			leftHandGrabbing = true
-			releaseTimers.left = 0
+		if
+			(cameraMode == CameraMode.HandHeld and false) -- replace false with left handed check
+			or player.head.rotation:getForwardVector():dot(getForward(player.head.position, leftHandPosition))
+				< -0.2
+		then
+			grabTimers.left += deltaTime
+			if grabTimers.left >= 0.2 then
+				leftHandGrabbing = true
+				releaseTimers.left = 0
+			end
 		end
 	else
 		grabTimers.left = 0
@@ -1507,15 +1518,20 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 	-- Right hand grab logic
 	if
 		not rightHandGrabbing
-		and player.head.rotation:getForwardVector():dot(getForward(player.head.position, rightHandPosition)) < -0.2
 		and rightPoseFlags.GripDown
 		and rightPoseFlags.TriggerDown
 		and rightPoseFlags.FullHandPoseOverride ~= HandPose.GrabBall
 	then
-		grabTimers.right += deltaTime
-		if grabTimers.right >= maxGrabTime then
-			rightHandGrabbing = true
-			releaseTimers.right = 0
+		if
+			(cameraMode == CameraMode.HandHeld and true) -- replace true with right handed check
+			or player.head.rotation:getForwardVector():dot(getForward(player.head.position, rightHandPosition))
+				< -0.2
+		then
+			grabTimers.right += deltaTime
+			if grabTimers.right >= maxGrabTime then
+				rightHandGrabbing = true
+				releaseTimers.right = 0
+			end
 		end
 	else
 		grabTimers.right = 0
@@ -1940,6 +1956,31 @@ function thirdPersonFacingBall(position: Vec3, offsetPosition: Vec3, rotation: Q
 	camera:lookAt(position, gravityUpDirection)
 end
 
+function handHeld(player: ReplayPlayer)
+	toggleSmoothing(false, true)
+
+	local positionOffset = Vec3.new(5, 0, 10)
+
+	local rightHandPosition = player.root.position + player.root.rotation:rotateVector(player.rightHand.position)
+	local rightHandRotation = player.root.rotation * player.rightHand.rotation
+	local leftHandPosition = player.root.position + player.root.rotation:rotateVector(player.leftHand.position)
+	local leftHandRotation = player.root.rotation * player.leftHand.rotation
+
+	if handHeldFlip or false then
+		positionOffset.x = -positionOffset.x
+		rightHandRotation *= Quat.fromEuler(0, 0, 180)
+	end
+
+	-- check if leftHanded
+	if false then
+		camera.position = leftHandPosition + leftHandRotation:rotateVector(positionOffset)
+		camera.rotation = leftHandRotation
+	else
+		camera.position = rightHandPosition + rightHandRotation:rotateVector(positionOffset)
+		camera.rotation = rightHandRotation
+	end
+end
+
 function withPlayer(player: ReplayPlayer)
 	local homeGoal = arena.homeGoal
 	local awayGoal = arena.awayGoal
@@ -2018,22 +2059,22 @@ function withPlayer(player: ReplayPlayer)
 
 	if previousCameraMode ~= cameraMode or previousTargetPlayerId ~= targetPlayerId then
 		toggleSmoothing(false, false)
-	elseif cameraMode ~= CameraMode.FirstPerson then
-		toggleSmoothing(true, true)
 	end
 
-	if radius > 0 and cameraMode ~= CameraMode.FirstPerson then
-		if cameraMode == CameraMode.HeadRotation then
-			thirdPerson(headPosition, cameraPositionOffset, headRotation, true)
-		elseif cameraMode == CameraMode.VelocityRotation then
-			thirdPersonVelocity(headPosition, player.velocity, headRotation)
-		elseif cameraMode == CameraMode.FaceTheBall then
-			if teamIndex ~= TeamIndex.NoTeam then
-				thirdPersonFacingBall(headPosition, headRotation:rotateVector(Vec3.new(-100, 0, 50)), headRotation)
-			else
-				thirdPerson(headPosition, cameraPositionOffset, headRotation, false)
-			end
+	if radius == 0 and cameraMode ~= CameraMode.HandHeld then
+		firstPerson(headPosition, cameraPositionOffset, headRotation * QuatFromVec3(cameraEulerOffset))
+	elseif cameraMode == CameraMode.HeadRotation then
+		thirdPerson(headPosition, cameraPositionOffset, headRotation, true)
+	elseif cameraMode == CameraMode.VelocityRotation then
+		thirdPersonVelocity(headPosition, player.velocity, headRotation)
+	elseif cameraMode == CameraMode.FaceTheBall then
+		if teamIndex ~= TeamIndex.NoTeam then
+			thirdPersonFacingBall(headPosition, headRotation:rotateVector(Vec3.new(-100, 0, 50)), headRotation)
+		else
+			thirdPerson(headPosition, cameraPositionOffset, headRotation, false)
 		end
+	elseif cameraMode == CameraMode.HandHeld then
+		handHeld(player)
 	else
 		firstPerson(headPosition, cameraPositionOffset, headRotation * QuatFromVec3(cameraEulerOffset))
 	end
