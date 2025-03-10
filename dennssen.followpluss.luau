@@ -2366,6 +2366,10 @@ function onMessageReceived(messageTable)
 	if messageTable.showNameTags then
 		showNameTags = messageTable.showNameTags
 	end
+	-- isLeftHanded is a boolean that helps decide whether or not to put the camera on the left hand when using Hand Held camera mode. This value might change dynamically if gesture controlls are on.
+	if messageTable.isLeftHanded ~= nil then
+		isLeftHanded = messageTable.isLeftHanded
+	end
 	-- muteSelf is a boolean that when set to true makes the camera unable to hear the followed player talk in game.
 	if messageTable.muteSelf then
 		muteSelf = messageTable.muteSelf
@@ -2409,6 +2413,31 @@ function onMessageReceived(messageTable)
 	-- cameraEulerOffset is a Vec3 that adds a rotational offset to the First Person and Head Rotation camera modes. The rotational offset only takes affect when in First Person or Head Rotation mode.
 	if messageTable.cameraEulerOffset then
 		cameraEulerOffset = stringToVec3(messageTable.cameraEulerOffset)
+	end
+	-- gestureControls is a boolean that enables/disables gesture controlls which allow the player being followed to grab their camera and switch camera modes in game.
+	if messageTable.gestureControls ~= nil then
+		gestureControls = messageTable.gestureControls
+	end
+	-- forwardGestureMode is a number that sets the cameras mode when the forwards gesture is used. Gesture modes can only be between numbers 2 and 4.
+	if messageTable.forwardGestureMode then
+		if messageTable.forwardGestureMode == 1 or messageTable.forwardGestureMode == 5 then
+			return -- Don't accept firstPerson or handheld as a gesture mode
+		end
+		forwardGestureMode = messageTable.forwardGestureMode
+	end
+	-- upGestureMode is a number that sets the cameras mode when the upwards gesture is used. Gesture modes can only be between numbers 2 and 4.
+	if messageTable.upGestureMode then
+		if messageTable.upGestureMode == 1 or messageTable.upGestureMode == 5 then
+			return -- Don't accept firstPerson or handheld as a gesture mode
+		end
+		upGestureMode = messageTable.upGestureMode
+	end
+	-- backwardsGestureMode is a number that sets the cameras mode when the backwards gesture is used. Gesture modes can only be between numbers 2 and 4.
+	if messageTable.backwardsGestureMode then
+		if messageTable.backwardsGestureMode == 1 or messageTable.backwardsGestureMode == 5 then
+			return -- Don't accept firstPerson or handheld as a gesture mode
+		end
+		backwardsGestureMode = messageTable.backwardsGestureMode
 	end
 	-- autoBall is a boolean that determens wether the auto shooting camera is enabled or not. You are still able to change values assotiated with the auto shooting camera even if the auto shooting camera is disabled.
 	if messageTable.autoBall ~= nil then
