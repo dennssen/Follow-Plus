@@ -3,14 +3,10 @@ local version: string = "1.7.0"
 alwaysTick = false
 metadata = {
 	name = "Follow Pluss",
-	description = "A Highly Customisable Multitool for all your Follow Needs, including but not limited to: 4 different Camera Modes, 2 Auto Cameras, Replay Compatability, and More!",
+	description = "A Highly Customisable Multitool for all your Follow Needs, including but not limited to: 5 different Camera Modes, 2 Auto Cameras, Replay Compatability, and More!",
 	author = "Dennssen",
 	defaultKeybind = "F",
 }
-
--- TODO:
--- Left Handed Toggle for Hand Held in GUI
--- Flip Gesture For Hande Held mode
 
 local CameraMode = {
 	FirstPerson = 1,
@@ -87,6 +83,7 @@ local function initializeProfiles()
 		upGestureMode = CameraMode.FaceTheBall,
 		backwardsGestureMode = CameraMode.HeadRotation,
 		focusedArena = false,
+		isLeftHanded = false,
 	}
 
 	-- remove every value in the root of the config that isn't profiles or lastUsedProfile
@@ -158,6 +155,7 @@ local homeGoalRotationOffset = Vec3.new(0, 0, 0)
 local autoGoalCam = profile.autoGoalCam
 local goalMode: number = profile.goalMode
 local goalModes = { "My Goal", "Both Goals" }
+local cameraInGoal: boolean = false
 
 local GoalMode = {
 	MyGoal = 1,
@@ -405,7 +403,11 @@ local cameraEulerOffset: Vec3 = stringToVec3(profile.cameraEulerOffset)
 local cameraPositionOffset: Vec3 = Vec3.zeroVector
 local hit: RayHit
 local distance = 0
-local handHeldFlip = false
+local flipTime: number = 0
+local maxFlipTime: number = 0.5
+local previousHandHeldRotationOffset: Quat = Quat.identity
+local nextHandHeldRotationOffset: Quat = Quat.identity
+local handHeldRotationOffset: Quat = Quat.identity
 
 local gravityUpDirection: Vec3 = Vec3.zeroVector
 
@@ -424,6 +426,7 @@ local playerIdInfo: string = ""
 -- labels
 local gameDataLabel = "Game Data"
 local nametagsLabel = "Nametags"
+local isLeftHandedLabel = "Left Handed"
 local muteSelfLabel = "Mute Self"
 local focusedArenaLabel = "Focused Arenas"
 local targetPlayerNameLabel = "Follow Player"
@@ -460,6 +463,11 @@ local TeamIndex = {
 	HomeTeam = 0,
 	AwayTeam = 1,
 }
+
+local previousLeftHandPosition: Vec3 = Vec3.zeroVector
+local previousRightHandPosition: Vec3 = Vec3.zeroVector
+local isLeftHanded: boolean = profile.isLeftHanded
+
 local lastServerPlayerList: { number } = {}
 local lastTeammatesList: { string } = {}
 local teammatesList: { string } = {}
@@ -714,8 +722,14 @@ function onGui()
 	if not Gui.isItemActive() then
 		nametagsLabel = generateAsterisk("Nametags", showNameTags ~= profile.showNameTags)
 	end
-	Gui.setItemTooltip("enable or disable nametags for all players")
+	Gui.setItemTooltip("Enable or disable nametags for all players")
 	camera.showNameTags = showNameTags
+
+	isLeftHanded = Gui.checkbox(isLeftHandedLabel, isLeftHanded)
+	if not Gui.isItemActive() then
+		isLeftHandedLabel = generateAsterisk("Left Handed", isLeftHanded ~= profile.isLeftHanded)
+	end
+	Gui.setItemTooltip("Makes you left handed | Used for Hand Held mode")
 
 	muteSelf = Gui.checkbox(muteSelfLabel, muteSelf)
 	if not Gui.isItemActive() then
@@ -1070,6 +1084,7 @@ Be able to grab the camera and throw it to change modes
 					ballGoalMode = ballGoalMode,
 					cameraEulerOffset = tostring(cameraEulerOffset),
 					cameraPositionOffset = tostring(cameraPositionOffset),
+					isLeftHanded = isLeftHanded,
 				}
 				lastUsedProfile = newProfileName
 				config.lastUsedProfile = lastUsedProfile
@@ -1137,6 +1152,7 @@ Be able to grab the camera and throw it to change modes
 				ballGoalMode = ballGoalMode,
 				cameraEulerOffset = tostring(cameraEulerOffset),
 				cameraPositionOffset = tostring(cameraPositionOffset),
+				isLeftHanded = isLeftHanded,
 			}
 			profile = config.profiles[lastUsedProfile]
 			saveConfig()
@@ -1461,7 +1477,7 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 		and leftPoseFlags.FullHandPoseOverride ~= HandPose.GrabBall
 	then
 		if
-			(cameraMode == CameraMode.HandHeld and false) -- replace false with left handed check
+			(cameraMode == CameraMode.HandHeld and isLeftHanded and not wasInGoal and not cameraInGoal)
 			or player.head.rotation:getForwardVector():dot(getForward(player.head.position, leftHandPosition))
 				< -0.2
 		then
@@ -1523,7 +1539,7 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 		and rightPoseFlags.FullHandPoseOverride ~= HandPose.GrabBall
 	then
 		if
-			(cameraMode == CameraMode.HandHeld and true) -- replace true with right handed check
+			(cameraMode == CameraMode.HandHeld and not isLeftHanded and not wasInGoal and not cameraInGoal)
 			or player.head.rotation:getForwardVector():dot(getForward(player.head.position, rightHandPosition))
 				< -0.2
 		then
@@ -1596,7 +1612,32 @@ function grabbingCamera(player: ReplayPlayer, grabHand: Transform)
 	end
 
 	if (throwVelocity:length() * 100) < 2.5 then
-		cameraMode = CameraMode.FirstPerson
+		local headDistance = getDist(camera.position, player.head.position)
+		local leftHandDistance =
+			getDist(camera.position, player.root.position + player.root.rotation:rotateVector(player.leftHand.position))
+		local rightHandDistance = getDist(
+			camera.position,
+			player.root.position + player.root.rotation:rotateVector(player.rightHand.position)
+		)
+
+		if headDistance <= 20 then
+			cameraMode = CameraMode.FirstPerson
+		elseif leftHandDistance <= 10 then
+			if leftHandDistance <= 0.1 and rightHandDistance <= 1.5 then
+				isLeftHanded = false
+			else
+				isLeftHanded = true
+			end
+			cameraMode = CameraMode.HandHeld
+		elseif rightHandDistance <= 10 then
+			if rightHandDistance <= 0.1 and leftHandDistance <= 1.5 then
+				isLeftHanded = true
+			else
+				isLeftHanded = false
+			end
+			cameraMode = CameraMode.HandHeld
+		end
+
 		return
 	end
 
@@ -1956,6 +1997,62 @@ function thirdPersonFacingBall(position: Vec3, offsetPosition: Vec3, rotation: Q
 	camera:lookAt(position, gravityUpDirection)
 end
 
+function checkFlip(rightHandTransform: Transform, rightHandPosebits, leftHandTransform: Transform, leftHandPosebits)
+	if flipTime < maxFlipTime then
+		handHeldRotationOffset =
+			Quat.slerp(previousHandHeldRotationOffset, nextHandHeldRotationOffset, flipTime / maxFlipTime)
+		flipTime += deltaTime
+		return
+	end
+
+	local leftHandPose = decodePoseBits(leftHandPosebits)
+	local rightHandPose = decodePoseBits(rightHandPosebits)
+
+	local leftHandVelocity = leftHandTransform.position - previousLeftHandPosition
+	local rightHandVelocity = rightHandTransform.position - previousRightHandPosition
+
+	local rightDot = leftHandTransform.rotation:getRightVector():dot(rightHandVelocity:normalize())
+	local leftDot = rightHandTransform.rotation:getRightVector():dot(leftHandVelocity:normalize())
+
+	if isLeftHanded then
+		local handForward = leftHandTransform.rotation:getForwardVector()
+		local otherHandDirection = getForward(leftHandTransform.position, rightHandTransform.position)
+		local handDistance = getDist(leftHandTransform.position, rightHandTransform.position)
+
+		if
+			rightHandPose.GripDown
+			and rightHandPose.TriggerDown
+			and rightHandVelocity:length() >= 1
+			and otherHandDirection:dot(-handForward) > 0.75
+			and handDistance <= 30
+		then
+			if rightDot > 0.8 or rightDot < -0.8 then
+				flipTime = 0
+				previousHandHeldRotationOffset = handHeldRotationOffset
+				nextHandHeldRotationOffset = handHeldRotationOffset * Quat.fromEuler(0, 0, 180 * -math.sign(rightDot))
+			end
+		end
+	else
+		local handForward = rightHandTransform.rotation:getForwardVector()
+		local otherHandDirection = getForward(rightHandTransform.position, leftHandTransform.position)
+		local handDistance = getDist(leftHandTransform.position, rightHandTransform.position)
+
+		if
+			leftHandPose.GripDown
+			and leftHandPose.TriggerDown
+			and leftHandVelocity:length() >= 1
+			and otherHandDirection:dot(-handForward) > 0.75
+			and handDistance <= 30
+		then
+			if leftDot > 0.8 or leftDot < -0.8 then
+				flipTime = 0
+				previousHandHeldRotationOffset = handHeldRotationOffset
+				nextHandHeldRotationOffset = handHeldRotationOffset * Quat.fromEuler(0, 0, 180 * -math.sign(leftDot))
+			end
+		end
+	end
+end
+
 function handHeld(player: ReplayPlayer)
 	toggleSmoothing(false, true)
 
@@ -1966,19 +2063,25 @@ function handHeld(player: ReplayPlayer)
 	local leftHandPosition = player.root.position + player.root.rotation:rotateVector(player.leftHand.position)
 	local leftHandRotation = player.root.rotation * player.leftHand.rotation
 
-	if handHeldFlip or false then
-		positionOffset.x = -positionOffset.x
-		rightHandRotation *= Quat.fromEuler(0, 0, 180)
-	end
+	local leftTransform = Transform.identity
+	leftTransform.position = leftHandPosition
+	leftTransform.rotation = leftHandRotation
+	local rightTransform = Transform.identity
+	rightTransform.position = rightHandPosition
+	rightTransform.rotation = rightHandRotation
+	checkFlip(rightTransform, player.rightHandPosebits, leftTransform, player.leftHandPosebits)
 
 	-- check if leftHanded
-	if false then
+	if isLeftHanded then
 		camera.position = leftHandPosition + leftHandRotation:rotateVector(positionOffset)
-		camera.rotation = leftHandRotation
+		camera.rotation = leftHandRotation * handHeldRotationOffset
 	else
 		camera.position = rightHandPosition + rightHandRotation:rotateVector(positionOffset)
-		camera.rotation = rightHandRotation
+		camera.rotation = rightHandRotation * handHeldRotationOffset
 	end
+
+	previousLeftHandPosition = leftHandPosition
+	previousRightHandPosition = rightHandPosition
 end
 
 function withPlayer(player: ReplayPlayer)
@@ -2002,6 +2105,7 @@ function withPlayer(player: ReplayPlayer)
 				if not doneOnce then
 					instaRotate = true
 				end
+				cameraInGoal = true
 				goalCam(awayGoal, player.root.position)
 				return
 			end
@@ -2012,10 +2116,17 @@ function withPlayer(player: ReplayPlayer)
 				if not doneOnce then
 					instaRotate = true
 				end
+				cameraInGoal = true
 				goalCam(homeGoal, player.root.position)
 				return
 			end
 		end
+
+		cameraInGoal = false
+	end
+
+	if cameraInGoal and not autoGoalCam then
+		cameraInGoal = false
 	end
 
 	if doneOnce then
