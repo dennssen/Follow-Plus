@@ -2363,7 +2363,7 @@ function onMessageReceived(messageTable)
 		readLocation = messageTable.readLocation
 	end
 	-- showNameTags is a boolean that decides whether or not to show name tags above players heads
-	if messageTable.showNameTags then
+	if messageTable.showNameTags ~= nil then
 		showNameTags = messageTable.showNameTags
 	end
 	-- isLeftHanded is a boolean that helps decide whether or not to put the camera on the left hand when using Hand Held camera mode. This value might change dynamically if gesture controlls are on.
@@ -2371,7 +2371,7 @@ function onMessageReceived(messageTable)
 		isLeftHanded = messageTable.isLeftHanded
 	end
 	-- muteSelf is a boolean that when set to true makes the camera unable to hear the followed player talk in game.
-	if messageTable.muteSelf then
+	if messageTable.muteSelf ~= nil then
 		muteSelf = messageTable.muteSelf
 	end
 	-- targetPlayerName is a string used for getting the player you want to follow. if this is empty or unable to find the name typed in it follows noone.
