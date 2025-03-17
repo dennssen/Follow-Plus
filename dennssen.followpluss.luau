@@ -7,6 +7,9 @@ metadata = {
 	defaultKeybind = "F",
 }
 
+--TODO: Asterisk for collapsing headers if one of the items inside is different
+--TODO: Use the height cap from getClosestArena for getClosestArenaBall
+
 local CameraMode = {
 	FirstPerson = 1,
 	HeadRotation = 2,
@@ -1317,16 +1320,32 @@ end
 function getClosestArenaBall(targetPosition: Vec3, frameData: ReplayFrame)
 	local balls = frameData.balls
 	local closestBallDistance = math.huge
-	local clostestBall: ReplayBall = nil
-	for i in balls do
-		local ball = balls[i]
-		local distance = getDist(targetPosition, ball.transform.position)
-		if distance < closestBallDistance and parseBallJSON(ball:toJson()).type ~= 2 then
-			closestBallDistance = distance
-			clostestBall = ball
+	local closestBall: ReplayBall = nil
+	for _, ball in balls do
+		local ballType = parseBallJSON(ball:toJson()).type
+		if ballType == 2 then
+			continue -- ball is not arena ball
+		end
+		local ballClosestArena = getClosestArena(ball.transform.position)
+		if
+			not isBetweenVector(
+				targetPosition,
+				ballClosestArena.position + (ballClosestArena.rotation:getUpVector() * arenaFloorOffset),
+				ballClosestArena.position + (ballClosestArena.rotation:getUpVector() * arenaRoofOffset),
+				ballClosestArena.rotation:getUpVector()
+			)
+		then
+			continue -- ball is not in the correct arena
+		end
+
+		local ballDistance = getDist(targetPosition, ball.transform.position)
+		if ballDistance < closestBallDistance then
+			closestBallDistance = ballDistance
+			closestBall = ball
 		end
 	end
-	return clostestBall
+
+	return closestBall
 end
 
 function getClosestBall(targetPosition: Vec3, frameData: ReplayFrame)
@@ -2331,10 +2350,10 @@ function tick(dt)
 
 	local ball = nil
 
-	if arena == nil then
-		ball = getClosestArenaBall(targetPlayer.root.position, frame)
+	if arena == nil or targetPlayer.teamIndex == TeamIndex.NoTeam then
+		ball = getClosestBall(targetPlayer.root.position, frame)
 	else
-		ball = getClosestArenaBall(arena.position, frame)
+		ball = getClosestArenaBall(targetPlayer.root.position, frame)
 	end
 
 	gravityUpDirection = targetPlayer.root.rotation:getUpVector()
