@@ -7,9 +7,6 @@ metadata = {
 	defaultKeybind = "F",
 }
 
---TODO: Asterisk for collapsing headers if one of the items inside is different
---TODO: Use the height cap from getClosestArena for getClosestArenaBall
-
 local CameraMode = {
 	FirstPerson = 1,
 	HeadRotation = 2,
@@ -426,6 +423,10 @@ local playerNameInfo: string = ""
 local playerIdInfo: string = ""
 
 -- labels
+local gestureControlsHeaderLabel = "Gesture Controls"
+local autoShootingCameraHeaderLabel = "Auto Shooting Camera"
+local goalCameraHeaderLabel = "Goal Camera"
+
 local gameDataLabel = "Game Data"
 local nametagsLabel = "Nametags"
 local isLeftHandedLabel = "Left Handed"
@@ -907,7 +908,8 @@ function onGui()
 	end
 
 	Gui.newLine()
-	if Gui.collapsingHeader("Gesture Controls") then
+	local gestureHeaderAsterisk = false
+	if Gui.collapsingHeader(gestureControlsHeaderLabel .. "###gesturecontrols") then
 		Gui.indent()
 		gestureControls = Gui.checkbox(gestureControlsLabel .. "##3", gestureControls)
 		if not Gui.isItemActive() then
@@ -965,10 +967,22 @@ Be able to grab the camera and throw it to change modes
 		Gui.unindent()
 	end
 
+	-- check for changes in the collapsing header
+	if
+		backwardsGestureMode ~= profile.backwardsGestureMode
+		or upGestureMode ~= profile.upGestureMode
+		or forwardGestureMode ~= profile.forwardGestureMode
+		or gestureControls ~= profile.gestureControls
+	then
+		gestureHeaderAsterisk = true
+	end
+	gestureControlsHeaderLabel = generateAsterisk("Gesture Controls", gestureHeaderAsterisk)
+
 	Gui.newLine()
 	Gui.separatorText("Auto Cameras")
 
-	if Gui.collapsingHeader("Auto Shooting Camera") then
+	local autoShootingCameraAsterisk = false
+	if Gui.collapsingHeader(autoShootingCameraHeaderLabel .. "###autoshootingcamera") then
 		Gui.indent()
 
 		autoBall = Gui.checkbox(autoBallLabel, autoBall)
@@ -1006,9 +1020,19 @@ Be able to grab the camera and throw it to change modes
 		Gui.unindent()
 	end
 
+	if
+		autoBall ~= profile.autoBall
+		or ballGoalMode ~= profile.ballGoalMode
+		or autoBallThreshold ~= profile.autoBallThreshold
+	then
+		autoShootingCameraAsterisk = true
+	end
+	autoShootingCameraHeaderLabel = generateAsterisk("Auto Shooting Camera", autoShootingCameraAsterisk)
+
 	Gui.newLine()
 
-	if Gui.collapsingHeader("Goal Camera") then
+	local goalCameraAsterisk = false
+	if Gui.collapsingHeader(goalCameraHeaderLabel .. "###goalcamera") then
 		Gui.indent()
 
 		autoGoalCam = Gui.checkbox(autoGoalCamLabel .. "##2", autoGoalCam)
@@ -1040,6 +1064,11 @@ Be able to grab the camera and throw it to change modes
 
 		Gui.unindent()
 	end
+
+	if autoGoalCam ~= profile.autoGoalCam or goalMode ~= profile.goalMode or distanceLerp ~= profile.distanceLerp then
+		goalCameraAsterisk = true
+	end
+	goalCameraHeaderLabel = generateAsterisk("Goal Camera", goalCameraAsterisk)
 
 	Gui.unindent()
 	Gui.newLine()
