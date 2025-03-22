@@ -2226,7 +2226,7 @@ function withPlayer(player: ReplayPlayer)
 		thirdPersonVelocity(headPosition, player.velocity, headRotation)
 	elseif cameraMode == CameraMode.FaceTheBall then
 		if teamIndex ~= TeamIndex.NoTeam then
-			thirdPersonFacingBall(headPosition, headRotation:rotateVector(Vec3.new(-100, 0, 50)), headRotation)
+			thirdPersonFacingBall(headPosition, player.root.rotation:rotateVector(Vec3.new(-100, 0, 50)), headRotation)
 		else
 			thirdPerson(headPosition, cameraPositionOffset, headRotation, false)
 		end
