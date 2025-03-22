@@ -60,7 +60,7 @@ end
 local function initializeProfiles()
 	local saveToConfig = false
 	local neededValues = {
-		radius = 30,
+		radius = 20,
 		distanceLerp = 4,
 		readLocation = 0,
 		autoBallThreshold = 12,
@@ -68,14 +68,14 @@ local function initializeProfiles()
 		cameraPositionOffset = "(A2.Vector){ 0.000000, 0.000000, 0.000000 }",
 		cameraEulerOffset = "(A2.Vector){ 0.000000, 0.000000, 0.000000 }",
 		showNameTags = true,
-		threshold = 10,
-		fieldOfView = 130,
+		threshold = 7,
+		fieldOfView = 100,
 		positionSmoothing = 0.1000000014901161,
 		autoGoalCam = false,
 		goalMode = 1,
 		autoBall = false,
 		targetPlayerName = "",
-		cameraMode = 2,
+		cameraMode = CameraMode.HeadRotation,
 		muteSelf = false,
 		gestureControls = false,
 		forwardGestureMode = CameraMode.VelocityRotation,
