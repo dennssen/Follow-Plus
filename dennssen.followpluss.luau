@@ -1355,13 +1355,12 @@ function getClosestArenaBall(targetPosition: Vec3, frameData: ReplayFrame)
 		if ballType == 2 then
 			continue -- ball is not arena ball
 		end
-		local ballClosestArena = getClosestArena(ball.transform.position)
 		if
 			not isBetweenVector(
-				targetPosition,
-				ballClosestArena.position + (ballClosestArena.rotation:getUpVector() * arenaFloorOffset),
-				ballClosestArena.position + (ballClosestArena.rotation:getUpVector() * arenaRoofOffset),
-				ballClosestArena.rotation:getUpVector()
+				ball.transform.position,
+				arena.position + (arena.rotation:getUpVector() * arenaFloorOffset),
+				arena.position + (arena.rotation:getUpVector() * arenaRoofOffset),
+				arena.rotation:getUpVector()
 			)
 		then
 			continue -- ball is not in the correct arena
@@ -2511,18 +2510,14 @@ function onMessageReceived(messageTable)
 	end
 end
 
--- Gesture controls:
+-- Goal Cam Rework:
 --[[
-	Toggleable option in the gui
-	Grab the camera by holding your hand behind your back and pressing the (lower face button and trigger) or (grip and trigger)
-	Let go off the camera near your head (with low velocity) to make it go to First Person mode
-	Throwing the camera in directions: Up, Forwards and Backwards switches to different third person modes.
-	For example:
-	- Backwards switches to Head Rotation
-	- Upwards switches to Face the Ball
-	- Forwards switches to Velocity Rotation
-	These are very logical default values, but i think making it configurable in the GUI would be perfect
-
-	Perhaps a new camera mode that lets you hold the camera like a go pro.
-	Then do a swipe gesture to switch between selfie and away cam
+	Get rid of the old static position method
+	Create a new method that follows these principals:
+	- Always has the ball in frame
+	- Always has the player in frame
+	- Gives a great view of the surrounding area
+	- You should know the same info the goalie does if you were looking
+	- The camera should never go inside the goal (i.e cross the scoring line)
+	- Transitions back to the player should not be disorienting
 ]]
