@@ -74,7 +74,7 @@ local function initializeProfiles()
 		autoGoalCam = false,
 		goalMode = 1,
 		autoBall = false,
-		targetPlayerName = "",
+		targetPlayerName = "YourName",
 		cameraMode = CameraMode.HeadRotation,
 		muteSelf = false,
 		gestureControls = false,
