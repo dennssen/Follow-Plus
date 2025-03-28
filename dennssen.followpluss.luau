@@ -1961,11 +1961,12 @@ function firstPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat)
 		position += offsetPosition
 	end
 
-	camera.hideNearestHead = true
-	--[[if position == headPosition then
-	else
+	local offsetDistance = getDist(headPosition, position)
+	if offsetDistance >= 50 then
 		camera.hideNearestHead = false
-	end]]
+	else
+		camera.hideNearestHead = true
+	end
 	camera.position = position
 	camera.rotation = rotation
 end
