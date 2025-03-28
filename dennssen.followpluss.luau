@@ -2397,6 +2397,12 @@ function tick(dt)
 	configureVOIP()
 end
 
+function onTransitionEnd(transitionInfo: Transition)
+	camera.showNameTags = true
+	camera.hideNearestHead = false
+	camera.nearClippingPlane = 0
+end
+
 function onMessageReceived(messageTable)
 	-- only accept tables
 	if type(messageTable) ~= "table" then
