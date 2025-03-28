@@ -1942,7 +1942,12 @@ function goalCam(goal, targetPosition: Vec3)
 	local forward = getForward(targetPosition, ballPosition)
 	local distance = getDist(targetPosition, ballPosition)
 
-	local lookAt = targetPosition + (forward * (distance / distanceLerp))
+	local lookAt: Vec3
+	if distanceLerp == 0 then
+		lookAt = targetPosition
+	else
+		lookAt = targetPosition + (forward * (distance / distanceLerp))
+	end
 
 	camera.hideNearestHead = false
 	camera:lookAt(lookAt, gravityUpDirection)
