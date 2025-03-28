@@ -597,6 +597,7 @@ function updateVariables(profileName)
 end
 
 function onTransitionBegin()
+	alwaysTick = true
 	World.clear()
 	if wasFollowed then
 		wasFollowed = false
@@ -2355,6 +2356,8 @@ end
 
 function tick(dt)
 	if not camera.isActive and not camera.isFollowed then
+		alwaysTick = false
+		onExit()
 		return
 	end
 
@@ -2397,7 +2400,7 @@ function tick(dt)
 	configureVOIP()
 end
 
-function onTransitionEnd(transitionInfo: Transition)
+function onExit()
 	camera.showNameTags = true
 	camera.hideNearestHead = false
 	camera.nearClippingPlane = 0
