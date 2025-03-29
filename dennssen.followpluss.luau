@@ -2403,7 +2403,7 @@ end
 function onExit()
 	camera.showNameTags = true
 	camera.hideNearestHead = false
-	camera.nearClippingPlane = 0
+	camera.nearClippingPlane = 0.001
 end
 
 function onMessageReceived(messageTable)
