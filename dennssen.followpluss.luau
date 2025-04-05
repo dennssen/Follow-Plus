@@ -2450,6 +2450,8 @@ function onMessageReceived(messageTable)
 	-- cameraFOV is a number that sets the camera FOV, the number can be set between 40 and 179
 	if messageTable.cameraFOV then
 		cameraFOV = messageTable.cameraFOV
+		cameraFOV = math.clamp(cameraFOV, 40, 179)
+		camera.fieldOfView = cameraFOV
 	end
 	-- positionSmoothing is a number that sets the cameras positions smoothing, the number can be set between 0.000 and 1.000
 	if messageTable.positionSmoothing then
