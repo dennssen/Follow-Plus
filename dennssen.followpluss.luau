@@ -398,6 +398,7 @@ local cameraMode: number = profile.cameraMode
 local cameraModes = { "First Person", "Head Rotation", "Velocity Rotation", "Face the Ball", "Hand Held" }
 local gestureModes = { "Head Rotation", "Velocity Rotation", "Face the Ball" }
 
+local cameraTransition: boolean = false
 local cameraEulerOffset: Vec3 = stringToVec3(profile.cameraEulerOffset)
 local cameraPositionOffset: Vec3 = Vec3.zeroVector
 local hit: RayHit
@@ -757,7 +758,6 @@ function onGui()
 		listActive = true
 	end
 
-	previousTargetPlayerId = targetPlayerId
 	if listActive then
 		Gui.indent()
 		Gui.beginListBox("Player List")
@@ -819,7 +819,6 @@ function onGui()
 	Gui.indent()
 	Gui.separatorText("Settings")
 
-	previousCameraMode = cameraMode
 	if Gui.beginCombo(cameraModeLabel, cameraModes[cameraMode]) then
 		for i = 1, #cameraModes do
 			if Gui.selectable(cameraModes[i], i == cameraMode) then
@@ -1955,7 +1954,10 @@ function goalCam(goal, targetPosition: Vec3)
 end
 
 function firstPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat)
-	toggleSmoothing(false, false)
+	if not cameraTransition then
+		toggleSmoothing(false, false)
+	end
+
 	if offsetPosition ~= nil then
 		offsetPosition = rotation:rotateVector(offsetPosition)
 		offsetPosition = registeredOffsetHit(position, offsetPosition)
@@ -1973,7 +1975,10 @@ function firstPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat)
 end
 
 function thirdPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat, smartSwitch: boolean)
-	toggleSmoothing(true, true)
+	if not cameraTransition then
+		toggleSmoothing(true, true)
+	end
+
 	if offsetPosition ~= nil then
 		offsetPosition = rotation:rotateVector(offsetPosition)
 		offsetPosition = registeredOffsetHit(position, offsetPosition)
@@ -2003,7 +2008,10 @@ function thirdPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat, smar
 end
 
 function thirdPersonVelocity(position: Vec3, velocity: Vec3, rotation: Quat)
-	toggleSmoothing(true, true)
+	if not cameraTransition then
+		toggleSmoothing(true, true)
+	end
+
 	local hitEnd = velocityPivotPosition(position, velocity, radius, false)
 	hit = updateRay(position, hitEnd)
 
@@ -2026,26 +2034,33 @@ function thirdPersonVelocity(position: Vec3, velocity: Vec3, rotation: Quat)
 	camera:lookAt(position, gravityUpDirection)
 end
 
-function thirdPersonFacingBall(position: Vec3, offsetPosition: Vec3, rotation: Quat)
-	toggleSmoothing(true, true)
+function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
+	if not cameraTransition then
+		toggleSmoothing(true, true)
+	end
+
+	local position = player.head.position
+
 	if offsetPosition ~= nil then
 		offsetPosition = registeredOffsetHit(position, offsetPosition)
 		position += offsetPosition
 	end
 
-	local hitEnd = twoPointPivotPosition(position, ballPosition, radius)
+	print(tostring(player.head.position) .. " | " .. tostring(player.root.position))
+
+	local hitEnd = faceTheBallPivotPosition(position, player.root.position, ballPosition, radius)
 	hit = updateRay(position, hitEnd)
 
 	if hit.successful then
-		if registeredHit(position, rotation, hit.position, false) == nil then
+		if registeredHit(position, player.head.rotation, hit.position, false) == nil then
 			return
 		end
-		localRadius = registeredHit(position, rotation, hit.position, false)
+		localRadius = registeredHit(position, player.head.rotation, hit.position, false)
 	else
 		localRadius = radius
 	end
 
-	camera.position = twoPointPivotPosition(position, ballPosition, localRadius)
+	camera.position = faceTheBallPivotPosition(position, player.root.position, ballPosition, radius)
 	camera.hideNearestHead = false
 	camera:lookAt(position, gravityUpDirection)
 end
@@ -2107,7 +2122,9 @@ function checkFlip(rightHandTransform: Transform, rightHandPosebits, leftHandTra
 end
 
 function handHeld(player: ReplayPlayer)
-	toggleSmoothing(false, true)
+	if not cameraTransition then
+		toggleSmoothing(false, true)
+	end
 
 	local positionOffset = Vec3.new(5, 0, 10)
 
@@ -2223,6 +2240,9 @@ function withPlayer(player: ReplayPlayer)
 
 	if previousCameraMode ~= cameraMode or previousTargetPlayerId ~= targetPlayerId then
 		toggleSmoothing(false, false)
+		cameraTransition = true
+	elseif cameraTransition then
+		cameraTransition = false
 	end
 
 	if radius == 0 and cameraMode ~= CameraMode.HandHeld then
@@ -2233,7 +2253,7 @@ function withPlayer(player: ReplayPlayer)
 		thirdPersonVelocity(headPosition, player.velocity, headRotation)
 	elseif cameraMode == CameraMode.FaceTheBall then
 		if teamIndex ~= TeamIndex.NoTeam then
-			thirdPersonFacingBall(headPosition, player.root.rotation:rotateVector(Vec3.new(-100, 0, 50)), headRotation)
+			thirdPersonFacingBall(player, Vec3.zeroVector)
 		else
 			thirdPerson(headPosition, cameraPositionOffset, headRotation, false)
 		end
@@ -2398,6 +2418,8 @@ function tick(dt)
 	updatePlayerData(targetPlayer, frame)
 	withPlayer(targetPlayer)
 	configureVOIP()
+	previousCameraMode = cameraMode
+	previousTargetPlayerId = targetPlayerId
 end
 
 function onExit()
@@ -2526,6 +2548,13 @@ function onMessageReceived(messageTable)
 		camera.hideNearestHead = messageTable.hideNearestHead
 	end
 end
+
+-- Face The Ball Cam Rework:
+--[[
+	Use a line in the player with the length of the player. 
+	Then using the balls position, get the closest point on the line from the ball.
+	Use the direction of the closest point and the ball.
+]]
 
 -- Goal Cam Rework:
 --[[
