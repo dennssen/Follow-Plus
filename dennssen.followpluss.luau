@@ -784,7 +784,7 @@ function onGui()
 
 			if Gui.selectable(tostring(player.playerName) .. "[" .. tostring(player.playerId) .. "]", isSelected) then
 				muteAll(false)
-				isSelfMuted = false
+				isSelfMuted = not muteSelf
 				teammatesList = {}
 				lastTeammatesList = {}
 				targetPlayerName = player.playerName
@@ -2302,10 +2302,13 @@ function configureVOIP()
 		end
 	end
 
-	if not muteSelf and isSelfMuted then
-		muteAll(false)
-		isSelfMuted = false
-	end
+	Settings.mutePlayerByName(targetPlayer.playerName, muteSelf)
+
+	--[[if not muteSelf and isSelfMuted then
+		if getDist(camera.position, camera:getSmoothedPosition()) < 1000 then
+			isSelfMuted = Settings.mutePlayerByName(targetPlayer.playerName, muteSelf)
+		end
+	end]]
 
 	if focusedArena and (#lastTeammatesList == 0 and #teammatesList > 0) then
 		-- entered arena
@@ -2350,9 +2353,11 @@ function configureVOIP()
 		end
 	end
 
-	if muteSelf and not isSelfMuted then
-		isSelfMuted = Settings.mutePlayerByName(targetPlayer.playerName, muteSelf)
-	end
+	--[[if muteSelf and not isSelfMuted then
+		if getDist(camera.position, camera:getSmoothedPosition()) < 1000 then
+			isSelfMuted = Settings.mutePlayerByName(targetPlayer.playerName, muteSelf)
+		end
+	end]]
 
 	for _, teammateName in teammatesList do
 		local tryFindTeammate = table.find(lastTeammatesList, teammateName)
