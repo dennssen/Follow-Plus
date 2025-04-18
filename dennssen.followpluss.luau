@@ -1477,6 +1477,18 @@ function twoPointPivotPosition(point1: Vec3, point2: Vec3, radius: number): Vec3
 	return pivotPosition
 end
 
+function faceTheBallPivotPosition(position: Vec3, point1: Vec3, point2: Vec3, radius: number): Vec3
+	local faceTheBallPosition = Vec3.zeroVector
+	local direction = getForward(point1, point2)
+	radius *= 10
+
+	World.drawPoint(point1, 1, 0, 0, 50, 0)
+	World.drawLine(position, position + (direction * 150), 0, 1, 0, 10, 0)
+	faceTheBallPosition = position + -direction * radius
+
+	return faceTheBallPosition
+end
+
 function updateBallData(ball: ReplayBall, seconds: number)
 	ballPosition = ball.transform.position
 	ballRotation = ball.transform.rotation
