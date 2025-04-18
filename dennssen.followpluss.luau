@@ -471,6 +471,8 @@ local TeamIndex = {
 local previousLeftHandPosition: Vec3 = Vec3.zeroVector
 local previousRightHandPosition: Vec3 = Vec3.zeroVector
 local isLeftHanded: boolean = profile.isLeftHanded
+local playerSwitchTime: number = 0
+local muteDelay: number = 1
 
 local lastServerPlayerList: { number } = {}
 local lastTeammatesList: { string } = {}
@@ -783,8 +785,9 @@ function onGui()
 			end
 
 			if Gui.selectable(tostring(player.playerName) .. "[" .. tostring(player.playerId) .. "]", isSelected) then
-				muteAll(false)
+				Settings.mutePlayerByName(targetPlayerName, false) -- unmute followed player before switch
 				isSelfMuted = not muteSelf
+				playerSwitchTime = os.clock()
 				teammatesList = {}
 				lastTeammatesList = {}
 				targetPlayerName = player.playerName
@@ -1214,7 +1217,8 @@ Be able to grab the camera and throw it to change modes
 		Gui.separatorText("Info")
 		Gui.indent()
 		if Gui.treeNode("Camera") then
-			Gui.text("Camera Position: " .. tostring(camera.position))
+			Gui.text("Camera Position (pre-smoothed): " .. tostring(camera.position))
+			Gui.text("Camera Position (post-smoothed): " .. tostring(camera:getSmoothedPosition()))
 			Gui.text("Camera Rotation: " .. tostring(camera.rotation:euler()))
 			Gui.treePop()
 		end
@@ -2302,13 +2306,11 @@ function configureVOIP()
 		end
 	end
 
-	Settings.mutePlayerByName(targetPlayer.playerName, muteSelf)
-
-	--[[if not muteSelf and isSelfMuted then
-		if getDist(camera.position, camera:getSmoothedPosition()) < 1000 then
-			isSelfMuted = Settings.mutePlayerByName(targetPlayer.playerName, muteSelf)
+	if not muteSelf and isSelfMuted then
+		if os.clock() >= playerSwitchTime + muteDelay then -- need this delay for muting to work when switching between players for some reason
+			isSelfMuted = not Settings.mutePlayerByName(targetPlayer.playerName, muteSelf)
 		end
-	end]]
+	end
 
 	if focusedArena and (#lastTeammatesList == 0 and #teammatesList > 0) then
 		-- entered arena
@@ -2353,11 +2355,11 @@ function configureVOIP()
 		end
 	end
 
-	--[[if muteSelf and not isSelfMuted then
-		if getDist(camera.position, camera:getSmoothedPosition()) < 1000 then
+	if muteSelf and not isSelfMuted then
+		if os.clock() >= playerSwitchTime + muteDelay then
 			isSelfMuted = Settings.mutePlayerByName(targetPlayer.playerName, muteSelf)
 		end
-	end]]
+	end
 
 	for _, teammateName in teammatesList do
 		local tryFindTeammate = table.find(lastTeammatesList, teammateName)
@@ -2443,6 +2445,7 @@ function onExit()
 	camera.showNameTags = true
 	camera.hideNearestHead = false
 	camera.nearClippingPlane = 0.001
+	muteAll(false)
 end
 
 function onMessageReceived(messageTable)
