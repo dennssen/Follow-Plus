@@ -1,5 +1,5 @@
 -- Only used for display reasons
-local version: string = "1.7.0"
+local version: string = "1.7.2"
 metadata = {
 	name = "Follow Pluss",
 	description = "A Highly Customisable Multitool for all your Follow Needs, including but not limited to: 5 different Camera Modes, 2 Auto Cameras, Replay Compatability, and More!",
@@ -1486,8 +1486,6 @@ function faceTheBallPivotPosition(position: Vec3, point1: Vec3, point2: Vec3, ra
 	local direction = getForward(point1, point2)
 	radius *= 10
 
-	World.drawPoint(point1, 1, 0, 0, 50, 0)
-	World.drawLine(position, position + (direction * 150), 0, 1, 0, 10, 0)
 	faceTheBallPosition = position + -direction * radius
 
 	return faceTheBallPosition
@@ -2061,8 +2059,6 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 		offsetPosition = registeredOffsetHit(position, offsetPosition)
 		position += offsetPosition
 	end
-
-	print(tostring(player.head.position) .. " | " .. tostring(player.root.position))
 
 	local hitEnd = faceTheBallPivotPosition(position, player.root.position, ballPosition, radius)
 	hit = updateRay(position, hitEnd)
