@@ -221,17 +221,24 @@ for _, arena in pairs(arenas) do
 	}
 end
 
-export type BoxType = {
+type BoxType = {
 	__index: BoxType,
 	position: Vec3,
 	size: Vec3,
 	rotation: Vec3,
-	traditionalRotation: Quat,
 	vertexLocations: { Vec3 },
 
+	__tostring: (self: BoxType) -> string,
 	new: (inputPosition: Vec3, inputSize: Vec3, inputRotation: Vec3) -> BoxType,
+	setPosition: (self: BoxType, inputPosition: Vec3) -> (),
+	setSize: (self: BoxType, inputPosition: Vec3) -> (),
+	setRotation: (self: BoxType, inputPosition: Vec3) -> (),
+	setRotationDeg: (self: BoxType, inputRotation: Vec3) -> (),
+	getPosition: (self: BoxType) -> Vec3,
+	getSize: (self: BoxType) -> Vec3,
+	getRotation: (self: BoxType) -> Vec3,
+	getRotationDeg: (self: BoxType) -> Vec3,
 	generatePoints: (self: BoxType) -> (),
-	getRotationMatrix: (self: BoxType, roll: number, pitch: number, yaw: number) -> { { number } },
 	multiplyMatrices: (self: BoxType, matrix1: { { number } }, matrix2: { { number } }) -> { { number } },
 	applyRotationMatrix: (self: BoxType, vec: Vec3, matrix: { { number } }) -> Vec3,
 	render: (self: BoxType, r: number, g: number, b: number) -> (),
@@ -247,17 +254,58 @@ function Box.new(inputPosition: Vec3, inputSize: Vec3, inputRotation: Vec3): Box
 	self.position = inputPosition
 	self.size = inputSize
 	self.rotation = Vec3.new(math.rad(inputRotation.x), math.rad(inputRotation.y), math.rad(inputRotation.z))
-	self.traditionalRotation =
-		Quat.fromEuler(math.deg(self.rotation.z), math.deg(self.rotation.y), math.deg(self.rotation.x))
 
 	self.vertexLocations = {}
 	self:generatePoints()
 	return self
 end
 
+function Box:setPosition(inputPosition: Vec3): ()
+	self.position = inputPosition
+	self:generatePoints()
+end
+
+function Box:setSize(inputSize: Vec3): ()
+	self.size = inputSize
+	self:generatePoints()
+end
+
+function Box:setRotation(inputRotation: Vec3): ()
+	self.rotation = inputRotation
+	self:generatePoints()
+end
+
+function Box:setRotationDeg(inputRotation: Vec3): ()
+	inputRotation.x = (inputRotation.x * math.pi) / 180
+	inputRotation.y = (inputRotation.y * math.pi) / 180
+	inputRotation.z = (inputRotation.z * math.pi) / 180
+	self.rotation = inputRotation
+	self:generatePoints()
+end
+
+function Box:getPosition(): Vec3
+	return Vec3.new(self.position.x, self.position.y, self.position.z)
+end
+
+function Box:getSize(): Vec3
+	return Vec3.new(self.size.x, self.size.y, self.size.z)
+end
+
+function Box:getRotation(): Vec3
+	return Vec3.new(self.rotation.x, self.rotation.y, self.rotation.z)
+end
+
+function Box:getRotationDeg(): Vec3
+	return Vec3.new(
+		(self.rotation.x * 180) / math.pi,
+		(self.rotation.y * 180) / math.pi,
+		(self.rotation.z * 180) / math.pi
+	)
+end
+
 function Box:generatePoints(): ()
-	local shift: { x: number, y: number, z: number } = { x = self.size.x / 2, y = self.size.y / 2, z = self.size.z / 2 }
-	local newVertexLocations: { Vec3 } = {
+	local shift = { x = self.size.x / 2, y = self.size.y / 2, z = self.size.z / 2 }
+	local newVertexLocations = {
 		Vec3.new(shift.x, shift.y, shift.z),
 		Vec3.new(shift.x, shift.y, -shift.z),
 		Vec3.new(shift.x, -shift.y, shift.z),
@@ -268,46 +316,20 @@ function Box:generatePoints(): ()
 		Vec3.new(-shift.x, -shift.y, -shift.z),
 	}
 
-	local rotationMatrix: { { number } } = self:getRotationMatrix(self.rotation.x, self.rotation.y, self.rotation.z)
+	local rotationQuat = Quat.fromEuler(math.deg(self.rotation.x), math.deg(self.rotation.y), math.deg(self.rotation.z))
 
-	for i: number in newVertexLocations do
-		newVertexLocations[i] = self:applyRotationMatrix(newVertexLocations[i], rotationMatrix)
+	for i = 1, #newVertexLocations do
+		newVertexLocations[i] = rotationQuat:rotateVector(newVertexLocations[i])
 	end
-	for i: number in newVertexLocations do
-		newVertexLocations[i].x += self.position.x
-		newVertexLocations[i].y += self.position.y
-		newVertexLocations[i].z += self.position.z
+
+	-- Translate the vertices by the box position.
+	for i = 1, #newVertexLocations do
+		newVertexLocations[i].x = newVertexLocations[i].x + self.position.x
+		newVertexLocations[i].y = newVertexLocations[i].y + self.position.y
+		newVertexLocations[i].z = newVertexLocations[i].z + self.position.z
 	end
 
 	self.vertexLocations = newVertexLocations
-end
-
-function Box:getRotationMatrix(roll: number, pitch: number, yaw: number): { { number } }
-	local cos: (number) -> number = math.cos
-	local sin: (number) -> number = math.sin
-
-	local yawMatrix: { { number } } = {
-		{ cos(yaw), 0, sin(yaw) },
-		{ 0, 1, 0 },
-		{ -sin(yaw), 0, cos(yaw) },
-	}
-
-	local pitchMatrix: { { number } } = {
-		{ 1, 0, 0 },
-		{ 0, cos(pitch), -sin(pitch) },
-		{ 0, sin(pitch), cos(pitch) },
-	}
-
-	local rollMatrix: { { number } } = {
-		{ cos(roll), -sin(roll), 0 },
-		{ sin(roll), cos(roll), 0 },
-		{ 0, 0, 1 },
-	}
-
-	local combinedMatrix: { { number } } = self:multiplyMatrices(yawMatrix, pitchMatrix)
-	combinedMatrix = self:multiplyMatrices(combinedMatrix, rollMatrix)
-
-	return combinedMatrix
 end
 
 function Box:multiplyMatrices(matrix1: { { number } }, matrix2: { { number } }): { { number } }
@@ -347,10 +369,15 @@ function Box:render(r: number, g: number, b: number): ()
 		{ start = self.vertexLocations[6], finish = self.vertexLocations[8] },
 	}
 
-	World.drawPoint(self.position, r, g, b, 3, 0)
+	World.drawPoint(self.position, 0.2, 3, 0.2, 5, 0)
 	for i: number, line: { start: Vec3, finish: Vec3 } in lines do
-		World.drawLine(line.start, line.finish, r, g, b, 2, 0)
+		World.drawLine(line.start, line.finish, r, g, b, 4, 0)
 	end
+
+	local rotationQuat = Quat.fromEuler(math.deg(self.rotation.x), math.deg(self.rotation.y), math.deg(self.rotation.z))
+	World.drawLine(self.position, self.position + rotationQuat:getForwardVector() * 100, 1, 0, 0, 10, 0)
+	World.drawLine(self.position, self.position + rotationQuat:getUpVector() * 100, 0, 1, 0, 10, 0)
+	World.drawLine(self.position, self.position + rotationQuat:getRightVector() * 100, 0, 0, 1, 10, 0)
 end
 
 function Box:checkPointIntersect(point: Vec3): boolean
@@ -1481,10 +1508,27 @@ function twoPointPivotPosition(point1: Vec3, point2: Vec3, radius: number): Vec3
 	return pivotPosition
 end
 
-function faceTheBallPivotPosition(position: Vec3, point1: Vec3, point2: Vec3, radius: number): Vec3
+function faceTheBallPivotPosition(
+	position: Vec3,
+	playerLine: { point1: Vec3, point2: Vec3 },
+	ballPosition: Vec3,
+	radius: number
+): Vec3
 	local faceTheBallPosition = Vec3.zeroVector
-	local direction = getForward(point1, point2)
+
+	local lineDistance = playerLine.point2 - playerLine.point1
+	local ballToLineStartDist = ballPosition - playerLine.point1
+	local scalar = ballToLineStartDist:dot(lineDistance) / lineDistance:dot(lineDistance)
+	scalar = math.clamp(scalar, 0, 1)
+	local closestPointToBall = playerLine.point1 + (lineDistance * scalar)
+
+	local direction = getForward(closestPointToBall, ballPosition)
 	radius *= 10
+
+	--Debug Draw:
+	World.clear()
+	World.drawLine(playerLine.point1, playerLine.point2, 0, 0, 1, 10, 0)
+	World.drawLine(closestPointToBall, closestPointToBall + (direction * 50), 0, 1, 0, 10, 0)
 
 	faceTheBallPosition = position + -direction * radius
 
@@ -1815,12 +1859,12 @@ function isInGoal(): boolean
 	local homeBox: BoxType = Box.new(
 		arena.homeGoal.position + (arena.rotation:getForwardVector() * 135),
 		Vec3.new(100, 500, 225),
-		Vec3.new(arena.rotation:euler().z, arena.rotation:euler().y, arena.rotation:euler().x)
+		arena.rotation:euler()
 	)
 	local awayBox: BoxType = Box.new(
 		arena.awayGoal.position - (arena.rotation:getForwardVector() * 135),
 		Vec3.new(100, 500, 225),
-		Vec3.new(arena.rotation:euler().z, arena.rotation:euler().y, arena.rotation:euler().x)
+		arena.rotation:euler()
 	)
 
 	if debugBallPrediction then
@@ -2053,14 +2097,26 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 		toggleSmoothing(true, true)
 	end
 
-	local position = player.head.position
+	local offset = player.head.rotation:rotateVector(Vec3.new(0, 0, 50))
+	local position = player.head.position + offset
+	local horizontalVelocity = player.velocity - player.velocity:projectOnTo(gravity.upDirection)
+
+	local lineVerticalOffset = player.root.rotation:rotateVector(Vec3.new(0, 0, -75))
+	local lineHorizontalOffset = Vec3.zeroVector
+	if horizontalVelocity:length() > 250 then
+		lineHorizontalOffset = horizontalVelocity:normalize() * 25
+	end
+	local playerLine = {
+		point1 = player.root.position,
+		point2 = player.root.position + lineVerticalOffset + lineHorizontalOffset,
+	}
 
 	if offsetPosition ~= nil then
 		offsetPosition = registeredOffsetHit(position, offsetPosition)
 		position += offsetPosition
 	end
 
-	local hitEnd = faceTheBallPivotPosition(position, player.root.position, ballPosition, radius)
+	local hitEnd = faceTheBallPivotPosition(position, playerLine, ballPosition, radius)
 	hit = updateRay(position, hitEnd)
 
 	if hit.successful then
@@ -2072,7 +2128,7 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 		localRadius = radius
 	end
 
-	camera.position = faceTheBallPivotPosition(position, player.root.position, ballPosition, radius)
+	camera.position = faceTheBallPivotPosition(position, playerLine, ballPosition, localRadius)
 	camera.hideNearestHead = false
 	camera:lookAt(position, gravityUpDirection)
 end
@@ -2568,13 +2624,13 @@ end
 -- Optimizations:
 --[[
 	The camera currently gets about 40fps less than freecam in most areas.
-	Steps to get out frames back are to remove as many loops as possible.
+	Steps to get our frames back are to remove as many loops as possible.
 ]]
 
 -- Face The Ball Cam Rework:
 --[[
-	Use a line in the player with the length of the player. 
-	Then using the balls position, get the closest point on the line from the ball.
+	Create a box around the player with a small depth (thin chest)
+	find the closest point on the box surface to the ball.
 	Use the direction of the closest point and the ball.
 ]]
 
