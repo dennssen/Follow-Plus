@@ -2565,6 +2565,12 @@ function onMessageReceived(messageTable)
 	end
 end
 
+-- Optimizations:
+--[[
+	The camera currently gets about 40fps less than freecam in most areas.
+	Steps to get out frames back are to remove as many loops as possible.
+]]
+
 -- Face The Ball Cam Rework:
 --[[
 	Use a line in the player with the length of the player. 
