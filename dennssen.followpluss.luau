@@ -514,6 +514,7 @@ local targetPlayerId = -1
 local headPosition: Vec3 = Vec3.new(0, 0, 0)
 local headRotation: Quat = Quat.identity
 local playerVelocity = Vec3.zeroVector
+local playerChestRotation: Quat = Quat.identity
 local isLocalPlayer = false
 local teamIndex = -1
 local TeamIndex = {
@@ -627,6 +628,9 @@ local orbitRotationSpeed = 4
 local rightMouseButton = Input.Key.RightMouseButton
 local xMouse = Input.Key.MouseX
 local yMouse = Input.Key.MouseY
+
+-- Debug
+local debugFaceTheBall: boolean = false
 
 function updateVariables(profileName)
 	targetPlayerId = -1
@@ -1270,6 +1274,10 @@ Be able to grab the camera and throw it to change modes
 		debugBallPrediction = Gui.checkbox("Debug Ball Prediction", debugBallPrediction)
 		GravityScale = Gui.dragInt("Gravity", GravityScale, 1, -1000, 0)
 		drag = Gui.sliderFloat("Drag", drag, 0, 10)
+
+		Gui.newLine()
+
+		debugFaceTheBall = Gui.checkbox("Debug Face The Ball", debugFaceTheBall)
 		Gui.unindent()
 		Gui.indent()
 		Gui.separatorText("Info")
@@ -1539,27 +1547,17 @@ function twoPointPivotPosition(point1: Vec3, point2: Vec3, radius: number): Vec3
 	return pivotPosition
 end
 
-function faceTheBallPivotPosition(
-	position: Vec3,
-	playerLine: { point1: Vec3, point2: Vec3 },
-	ballPosition: Vec3,
-	radius: number
-): Vec3
+function faceTheBallPivotPosition(position: Vec3, playerBox: BoxType, ballPosition: Vec3, radius: number): Vec3
 	local faceTheBallPosition = Vec3.zeroVector
 
-	local lineDistance = playerLine.point2 - playerLine.point1
-	local ballToLineStartDist = ballPosition - playerLine.point1
-	local scalar = ballToLineStartDist:dot(lineDistance) / lineDistance:dot(lineDistance)
-	scalar = math.clamp(scalar, 0, 1)
-	local closestPointToBall = playerLine.point1 + (lineDistance * scalar)
+	local closestPointToBall = playerBox:getClosestPoint(ballPosition, false)
 
 	local direction = getForward(closestPointToBall, ballPosition)
 	radius *= 10
 
-	--Debug Draw:
-	World.clear()
-	World.drawLine(playerLine.point1, playerLine.point2, 0, 0, 1, 10, 0)
-	World.drawLine(closestPointToBall, closestPointToBall + (direction * 50), 0, 1, 0, 10, 0)
+	if debugFaceTheBall then
+		World.drawLine(closestPointToBall, closestPointToBall + (direction * 50), 0, 1, 0, 10, 0)
+	end
 
 	faceTheBallPosition = position + -direction * radius
 
@@ -2130,24 +2128,41 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 
 	local offset = player.head.rotation:rotateVector(Vec3.new(0, 0, 50))
 	local position = player.head.position + offset
+
 	local horizontalVelocity = player.velocity - player.velocity:projectOnTo(gravity.upDirection)
 
-	local lineVerticalOffset = player.root.rotation:rotateVector(Vec3.new(0, 0, -75))
-	local lineHorizontalOffset = Vec3.zeroVector
-	if horizontalVelocity:length() > 250 then
-		lineHorizontalOffset = horizontalVelocity:normalize() * 25
+	local headForward = player.head.rotation:getForwardVector()
+	local alignedHeadDirection = headForward - gravity.upDirection * headForward:dot(gravity.upDirection)
+	alignedHeadDirection = alignedHeadDirection:normalize()
+
+	local directionAlignment = playerChestRotation:getForwardVector():dot(alignedHeadDirection)
+
+	if directionAlignment >= -0.9 or directionAlignment <= 0.9 then
+		playerChestRotation = Quat.fromXZ(alignedHeadDirection, gravity.upDirection)
 	end
-	local playerLine = {
-		point1 = player.root.position,
-		point2 = player.root.position + lineVerticalOffset + lineHorizontalOffset,
-	}
+
+	local verticalOffset = player.root.rotation:rotateVector(Vec3.new(0, 0, -50))
+	local horizontalOffset = playerChestRotation:getForwardVector()
+		* -math.clamp(
+			player.velocity:length() * math.sign(playerChestRotation:getForwardVector():dot(horizontalVelocity)),
+			10,
+			40
+		)
+
+	local playerBox: BoxType =
+		Box.new(player.root.position + verticalOffset + horizontalOffset, Vec3.new(5, 50, 100), playerChestRotation)
+
+	if debugFaceTheBall then
+		World.clear()
+		playerBox:render(0.7, 0.15, 0.15)
+	end
 
 	if offsetPosition ~= nil then
 		offsetPosition = registeredOffsetHit(position, offsetPosition)
 		position += offsetPosition
 	end
 
-	local hitEnd = faceTheBallPivotPosition(position, playerLine, ballPosition, radius)
+	local hitEnd = faceTheBallPivotPosition(position, playerBox, ballPosition, radius)
 	hit = updateRay(position, hitEnd)
 
 	if hit.successful then
@@ -2159,7 +2174,7 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 		localRadius = radius
 	end
 
-	camera.position = faceTheBallPivotPosition(position, playerLine, ballPosition, localRadius)
+	camera.position = faceTheBallPivotPosition(position, playerBox, ballPosition, localRadius)
 	camera.hideNearestHead = false
 	camera:lookAt(position, gravityUpDirection)
 end
