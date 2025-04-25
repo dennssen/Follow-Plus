@@ -833,7 +833,10 @@ function onGui()
 					continue
 				end
 			else
-				if not string.find(player.playerName, targetPlayerName) then
+				if
+					not string.find(string.lower(player.playerName), string.lower(targetPlayerName))
+					and targetPlayerName ~= "YourName"
+				then
 					continue
 				end
 			end
@@ -846,6 +849,7 @@ function onGui()
 				lastTeammatesList = {}
 				targetPlayerName = player.playerName
 				targetPlayerId = player.playerId
+				teamIndex = TeamIndex.NoTeam
 			end
 		end
 		Gui.endListBox()
