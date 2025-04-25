@@ -360,9 +360,11 @@ function Box:render(r: number, g: number, b: number): ()
 		World.drawLine(line.start, line.finish, r, g, b, 4, 0)
 	end
 
-	World.drawLine(self.position, self.position + self.rotation:getForwardVector() * 100, 1, 0, 0, 10, 0)
-	World.drawLine(self.position, self.position + self.rotation:getUpVector() * 100, 0, 1, 0, 10, 0)
-	World.drawLine(self.position, self.position + self.rotation:getRightVector() * 100, 0, 0, 1, 10, 0)
+	local minSize = math.max(math.min(self.size.x, self.size.y, self.size.z), 10)
+
+	World.drawLine(self.position, self.position + self.rotation:getForwardVector() * minSize, 1, 0, 0, 2.5, 0)
+	World.drawLine(self.position, self.position + self.rotation:getUpVector() * minSize, 0, 1, 0, 2.5, 0)
+	World.drawLine(self.position, self.position + self.rotation:getRightVector() * minSize, 0, 0, 1, 2.5, 0)
 end
 
 function Box:checkPointIntersect(point: Vec3): boolean
