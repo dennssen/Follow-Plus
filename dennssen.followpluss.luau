@@ -225,35 +225,35 @@ type BoxType = {
 	__index: BoxType,
 	position: Vec3,
 	size: Vec3,
-	rotation: Vec3,
+	rotation: Quat,
 	vertexLocations: { Vec3 },
 
 	__tostring: (self: BoxType) -> string,
-	new: (inputPosition: Vec3, inputSize: Vec3, inputRotation: Vec3) -> BoxType,
+	new: (inputPosition: Vec3, inputSize: Vec3, inputRotation: Quat) -> BoxType,
 	setPosition: (self: BoxType, inputPosition: Vec3) -> (),
 	setSize: (self: BoxType, inputPosition: Vec3) -> (),
-	setRotation: (self: BoxType, inputPosition: Vec3) -> (),
-	setRotationDeg: (self: BoxType, inputRotation: Vec3) -> (),
+	setRotation: (self: BoxType, inputPosition: Quat) -> (),
 	getPosition: (self: BoxType) -> Vec3,
 	getSize: (self: BoxType) -> Vec3,
-	getRotation: (self: BoxType) -> Vec3,
+	getRotation: (self: BoxType) -> Quat,
 	getRotationDeg: (self: BoxType) -> Vec3,
 	generatePoints: (self: BoxType) -> (),
 	multiplyMatrices: (self: BoxType, matrix1: { { number } }, matrix2: { { number } }) -> { { number } },
 	applyRotationMatrix: (self: BoxType, vec: Vec3, matrix: { { number } }) -> Vec3,
 	render: (self: BoxType, r: number, g: number, b: number) -> (),
 	checkPointIntersect: (self: BoxType, point: Vec3) -> boolean,
+	getClosestPoint: (self: BoxType, point: Vec3, surfaceOnly: boolean) -> Vec3,
 }
 
 local Box: BoxType = {} :: BoxType
 Box.__index = Box
 
-function Box.new(inputPosition: Vec3, inputSize: Vec3, inputRotation: Vec3): BoxType
+function Box.new(inputPosition: Vec3, inputSize: Vec3, inputRotation: Quat): BoxType
 	local self: BoxType = setmetatable({}, Box) :: any
 
 	self.position = inputPosition
 	self.size = inputSize
-	self.rotation = Vec3.new(math.rad(inputRotation.x), math.rad(inputRotation.y), math.rad(inputRotation.z))
+	self.rotation = inputRotation
 
 	self.vertexLocations = {}
 	self:generatePoints()
@@ -270,15 +270,7 @@ function Box:setSize(inputSize: Vec3): ()
 	self:generatePoints()
 end
 
-function Box:setRotation(inputRotation: Vec3): ()
-	self.rotation = inputRotation
-	self:generatePoints()
-end
-
-function Box:setRotationDeg(inputRotation: Vec3): ()
-	inputRotation.x = (inputRotation.x * math.pi) / 180
-	inputRotation.y = (inputRotation.y * math.pi) / 180
-	inputRotation.z = (inputRotation.z * math.pi) / 180
+function Box:setRotation(inputRotation: Quat): ()
 	self.rotation = inputRotation
 	self:generatePoints()
 end
@@ -291,16 +283,12 @@ function Box:getSize(): Vec3
 	return Vec3.new(self.size.x, self.size.y, self.size.z)
 end
 
-function Box:getRotation(): Vec3
-	return Vec3.new(self.rotation.x, self.rotation.y, self.rotation.z)
+function Box:getRotation(): Quat
+	return self.rotation
 end
 
 function Box:getRotationDeg(): Vec3
-	return Vec3.new(
-		(self.rotation.x * 180) / math.pi,
-		(self.rotation.y * 180) / math.pi,
-		(self.rotation.z * 180) / math.pi
-	)
+	return self.rotation:euler()
 end
 
 function Box:generatePoints(): ()
@@ -316,10 +304,8 @@ function Box:generatePoints(): ()
 		Vec3.new(-shift.x, -shift.y, -shift.z),
 	}
 
-	local rotationQuat = Quat.fromEuler(math.deg(self.rotation.x), math.deg(self.rotation.y), math.deg(self.rotation.z))
-
 	for i = 1, #newVertexLocations do
-		newVertexLocations[i] = rotationQuat:rotateVector(newVertexLocations[i])
+		newVertexLocations[i] = self.rotation:rotateVector(newVertexLocations[i])
 	end
 
 	-- Translate the vertices by the box position.
@@ -374,10 +360,9 @@ function Box:render(r: number, g: number, b: number): ()
 		World.drawLine(line.start, line.finish, r, g, b, 4, 0)
 	end
 
-	local rotationQuat = Quat.fromEuler(math.deg(self.rotation.x), math.deg(self.rotation.y), math.deg(self.rotation.z))
-	World.drawLine(self.position, self.position + rotationQuat:getForwardVector() * 100, 1, 0, 0, 10, 0)
-	World.drawLine(self.position, self.position + rotationQuat:getUpVector() * 100, 0, 1, 0, 10, 0)
-	World.drawLine(self.position, self.position + rotationQuat:getRightVector() * 100, 0, 0, 1, 10, 0)
+	World.drawLine(self.position, self.position + self.rotation:getForwardVector() * 100, 1, 0, 0, 10, 0)
+	World.drawLine(self.position, self.position + self.rotation:getUpVector() * 100, 0, 1, 0, 10, 0)
+	World.drawLine(self.position, self.position + self.rotation:getRightVector() * 100, 0, 0, 1, 10, 0)
 end
 
 function Box:checkPointIntersect(point: Vec3): boolean
@@ -405,6 +390,48 @@ function Box:checkPointIntersect(point: Vec3): boolean
 	else
 		return false
 	end
+end
+
+function Box:getClosestPoint(point: Vec3, surfaceOnly: boolean): Vec3
+	local pointOffset = point - self.position
+	local localPoint = self.rotation:inverse():rotateVector(pointOffset)
+	local boxExtents = Vec3.new(self.size.x / 2, self.size.y / 2, self.size.z / 2)
+
+	local clamped = Vec3.new(
+		math.clamp(localPoint.x, -boxExtents.x, boxExtents.x),
+		math.clamp(localPoint.y, -boxExtents.y, boxExtents.y),
+		math.clamp(localPoint.z, -boxExtents.z, boxExtents.z)
+	)
+
+	if surfaceOnly and self:checkPointIntersect(localPoint) then
+		local dx = math.min(boxExtents.x - localPoint.x, localPoint.x + boxExtents.x)
+		local dy = math.min(boxExtents.y - localPoint.y, localPoint.y + boxExtents.y)
+		local dz = math.min(boxExtents.z - localPoint.z, localPoint.z + boxExtents.z)
+
+		if dx <= dy and dx <= dz then
+			if localPoint.x > 0 then
+				clamped.x = boxExtents.x
+			else
+				clamped.x = -boxExtents.x
+			end
+		elseif dy <= dz then
+			if localPoint.y > 0 then
+				clamped.y = boxExtents.y
+			else
+				clamped.y = -boxExtents.y
+			end
+		else
+			if localPoint.z > 0 then
+				clamped.z = boxExtents.z
+			else
+				clamped.z = -boxExtents.z
+			end
+		end
+	end
+
+	local worldClosest = self.rotation:rotateVector(clamped) + self.position
+
+	return worldClosest
 end
 
 local arena = arenas.plazaStadium
