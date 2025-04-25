@@ -2507,17 +2507,17 @@ function tick(dt)
 		return
 	end
 
-	local ball = nil
+	updatePlayerData(targetPlayer, frame)
 
+	local ball = nil
 	if arena == nil or targetPlayer.teamIndex == TeamIndex.NoTeam then
 		ball = getClosestBall(targetPlayer.root.position, frame)
 	else
-		ball = getClosestArenaBall(targetPlayer.root.position, frame)
+		ball = getClosestArenaBall(arena.position, frame)
 	end
 
 	gravityUpDirection = targetPlayer.root.rotation:getUpVector()
 	updateBallData(ball, dt)
-	updatePlayerData(targetPlayer, frame)
 	withPlayer(targetPlayer)
 	configureVOIP()
 	previousCameraMode = cameraMode
