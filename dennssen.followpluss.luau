@@ -146,6 +146,16 @@ local focusedArena = false
 local lastFocusedArena = focusedArena
 
 -- goal
+local goalCamPositionOffset = Vec3.new(3330, 0, 250)
+local goalCamFOV = 120
+local bridgeHeightOffset = 245
+local haloHeightOffset = 580
+local underBridgeRotation = Quat.fromEuler(0, -40, 0)
+local overBridgeRotation = Quat.fromEuler(0, -20, 0)
+local overHaloRotation = Quat.identity
+local enterGoalCamDist = 500
+local exitGoalCamDist = 750
+
 local goalPositionOffset = 3165
 local goalHeightOffset = Vec3.new(0, 0, -40)
 local awayGoalRotationOffset = Vec3.new(0, 0, 180)
@@ -154,6 +164,8 @@ local homeGoalRotationOffset = Vec3.new(0, 0, 0)
 local autoGoalCam = profile.autoGoalCam
 local goalMode: number = profile.goalMode
 local goalModes = { "My Goal", "Both Goals" }
+local cameraInAwayGoal: boolean = false
+local cameraInHomeGoal: boolean = false
 local cameraInGoal: boolean = false
 
 local GoalMode = {
@@ -165,6 +177,7 @@ local instaRotate = false
 local doneOnce = false
 local distanceLerp = profile.distanceLerp
 
+-- arena
 local arenaFloorOffset = -350
 local arenaRoofOffset = 1150
 
@@ -172,13 +185,25 @@ type Arena = {
 	name: string,
 	position: Vec3,
 	rotation: Quat,
-	awayGoal: {
-		position: Vec3,
-		rotation: Vec3,
+	home: {
+		goal: {
+			position: Vec3,
+			rotation: Quat,
+		},
+		goalCam: {
+			position: Vec3,
+			rotation: Quat,
+		},
 	},
-	homeGoal: {
-		position: Vec3,
-		rotation: Vec3,
+	away: {
+		goal: {
+			position: Vec3,
+			rotation: Quat,
+		},
+		goalCam: {
+			position: Vec3,
+			rotation: Quat,
+		},
 	},
 }
 
@@ -187,12 +212,29 @@ function createArena(name: string, position: Vec3, rotation: Quat): Arena
 		name = name,
 		position = position,
 		rotation = rotation,
-		awayGoal = nil,
-		homeGoal = nil,
+		home = {
+			goal = {
+				position = nil,
+				rotation = nil,
+			},
+			goalCam = {
+				position = nil,
+				rotation = nil,
+			},
+		},
+		away = {
+			goal = {
+				position = nil,
+				rotation = nil,
+			},
+			goalCam = {
+				position = nil,
+				rotation = nil,
+			},
+		},
 	}
 end
 
---arena
 local arenas: { [any]: Arena } = {
 	plazaStadium = createArena("Plaza Stadium", Vec3.new(0, 9900, -29650), Quat.fromEuler(0, 0, 0)),
 	plazaEast = createArena("Plaza East", Vec3.new(-4425, 18550, -29650), Quat.fromEuler(0, 0, 90)),
@@ -211,13 +253,22 @@ local arenas: { [any]: Arena } = {
 }
 
 for _, arena in pairs(arenas) do
-	arena.awayGoal = {
+	arena.home.goal = {
+		position = arena.position + goalHeightOffset + arena.rotation:getForwardVector() * goalPositionOffset,
+		rotation = arena.rotation:euler() + homeGoalRotationOffset,
+	}
+	arena.away.goal = {
 		position = arena.position + goalHeightOffset + arena.rotation:getForwardVector() * -goalPositionOffset,
 		rotation = arena.rotation:euler() + awayGoalRotationOffset,
 	}
-	arena.homeGoal = {
-		position = arena.position + goalHeightOffset + arena.rotation:getForwardVector() * goalPositionOffset,
-		rotation = arena.rotation:euler() + homeGoalRotationOffset,
+
+	arena.home.goalCam = {
+		position = arena.position + arena.rotation:rotateVector(goalCamPositionOffset),
+		rotation = arena.rotation * Quat.fromEuler(0, 0, 180),
+	}
+	arena.away.goalCam = {
+		position = arena.position + (arena.rotation * Quat.fromEuler(0, 0, 180)):rotateVector(goalCamPositionOffset),
+		rotation = arena.rotation,
 	}
 end
 
@@ -1893,12 +1944,12 @@ end
 
 function isInGoal(): boolean
 	local homeBox: BoxType = Box.new(
-		arena.homeGoal.position + (arena.rotation:getForwardVector() * 135),
+		arena.home.goal.position + (arena.rotation:getForwardVector() * 135),
 		Vec3.new(100, 500, 225),
 		arena.rotation
 	)
 	local awayBox: BoxType = Box.new(
-		arena.awayGoal.position - (arena.rotation:getForwardVector() * 135),
+		arena.away.goal.position - (arena.rotation:getForwardVector() * 135),
 		Vec3.new(100, 500, 225),
 		arena.rotation
 	)
@@ -2022,7 +2073,7 @@ function ballCam(radius: number, rotation: Quat)
 	camera:lookAt(ballPosition, gravityUpDirection)
 end
 
-function goalCam(goal, targetPosition: Vec3)
+function goalCam(targetPosition: Vec3, defaultRotation: Quat)
 	if instaRotate then
 		toggleSmoothing(false, false)
 		instaRotate = false
@@ -2031,20 +2082,40 @@ function goalCam(goal, targetPosition: Vec3)
 		toggleSmoothing(false, true)
 	end
 
-	camera.position = twoPointPivotPosition(goal.position, ballPosition, 5)
+	camera.position = targetPosition
+	camera.fieldOfView = goalCamFOV
 
-	local forward = getForward(targetPosition, ballPosition)
-	local distance = getDist(targetPosition, ballPosition)
+	local cameraRotation = defaultRotation
 
-	local lookAt: Vec3
-	if distanceLerp == 0 then
-		lookAt = targetPosition
-	else
-		lookAt = targetPosition + (forward * (distance / distanceLerp))
+	local ballDirection = getForward(camera.position, ballPosition)
+	local horizontallyAlignedBallDirection = (ballDirection - ballDirection:projectOnTo(gravity.upDirection)):normalize()
+	local ballCameraAlignment = arena.rotation:getForwardVector():dot(horizontallyAlignedBallDirection)
+
+	local isBallLeft = math.abs(ballCameraAlignment) < 0.7
+		and camera.rotation:getRightVector():dot(horizontallyAlignedBallDirection) < 0
+	local isBallRight = math.abs(ballCameraAlignment) < 0.7
+		and camera.rotation:getRightVector():dot(horizontallyAlignedBallDirection) > 0
+
+	if isBallLeft then
+		cameraRotation *= Quat.fromEuler(0, 0, -25)
+	elseif isBallRight then
+		cameraRotation *= Quat.fromEuler(0, 0, 25)
 	end
 
-	camera.hideNearestHead = false
-	camera:lookAt(lookAt, gravityUpDirection)
+	local bridgeLine = arena.position + arena.rotation:getUpVector() * bridgeHeightOffset
+	local haloLine = arena.position + arena.rotation:getUpVector() * haloHeightOffset
+	local ballIsOverBridge = arena.rotation:getUpVector():dot(getForward(bridgeLine, ballPosition)) > 0
+	local ballIsOverHalo = arena.rotation:getUpVector():dot(getForward(haloLine, ballPosition)) > 0
+
+	if ballIsOverHalo then
+		cameraRotation *= overHaloRotation
+	elseif ballIsOverBridge then
+		cameraRotation *= overBridgeRotation
+	else
+		cameraRotation *= underBridgeRotation
+	end
+
+	camera.rotation = cameraRotation
 end
 
 function firstPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat)
@@ -2281,9 +2352,8 @@ function handHeld(player: ReplayPlayer)
 end
 
 function withPlayer(player: ReplayPlayer)
-	local homeGoal = arena.homeGoal
-	local awayGoal = arena.awayGoal
-	local distance = 750
+	local homeGoal = arena.home.goal
+	local awayGoal = arena.away.goal
 
 	-- check for gesture controls
 	if gestureControls then
@@ -2296,32 +2366,56 @@ function withPlayer(player: ReplayPlayer)
 	end
 
 	if autoGoalCam and not ballTarget then
-		if getDist(awayGoal.position, player.root.position) < distance and teamIndex ~= TeamIndex.NoTeam then
+		if
+			not cameraInAwayGoal
+			and getDist(awayGoal.position, player.root.position) < enterGoalCamDist
+			and teamIndex ~= TeamIndex.NoTeam
+		then
 			if goalMode == GoalMode.MyGoal and teamIndex == TeamIndex.AwayTeam or goalMode == GoalMode.BothGoals then
 				if not doneOnce then
 					instaRotate = true
 				end
+				cameraInAwayGoal = true
 				cameraInGoal = true
-				goalCam(awayGoal, player.root.position)
-				return
 			end
 		end
 
-		if getDist(homeGoal.position, player.root.position) < distance and teamIndex ~= TeamIndex.NoTeam then
+		if
+			not cameraInHomeGoal
+			and getDist(homeGoal.position, player.root.position) < enterGoalCamDist
+			and teamIndex ~= TeamIndex.NoTeam
+		then
 			if goalMode == GoalMode.MyGoal and teamIndex == TeamIndex.HomeTeam or goalMode == GoalMode.BothGoals then
 				if not doneOnce then
 					instaRotate = true
 				end
+				cameraInHomeGoal = true
 				cameraInGoal = true
-				goalCam(homeGoal, player.root.position)
-				return
 			end
 		end
 
-		cameraInGoal = false
+		if cameraInAwayGoal and getDist(awayGoal.position, player.root.position) > exitGoalCamDist then
+			cameraInAwayGoal = false
+			cameraInGoal = false
+		end
+
+		if cameraInHomeGoal and getDist(homeGoal.position, player.root.position) > exitGoalCamDist then
+			cameraInHomeGoal = false
+			cameraInGoal = false
+		end
+
+		if cameraInAwayGoal then
+			goalCam(arena.away.goalCam.position, arena.away.goalCam.rotation)
+			return
+		elseif cameraInHomeGoal then
+			goalCam(arena.home.goalCam.position, arena.home.goalCam.rotation)
+			return
+		end
 	end
 
 	if cameraInGoal and not autoGoalCam then
+		cameraInAwayGoal = false
+		cameraInHomeGoal = false
 		cameraInGoal = false
 	end
 
@@ -2698,7 +2792,7 @@ end
 
 	Current Thought:
 	- Transition Enter when player is x distance from the goal
-	- Clip the camera inside the backboard
+	- Clip the camera inside the backboard (Pos offset: (3330, 0, 250))
 	- Have a FOV of 120
 	- Make the camera focus on the ball, rotating to face it when the camera.rotation:getForwradVector():dot(ballDirection) < 0.7 ca.
 	- Transition Leave when player is 1.25x distance from the goal
