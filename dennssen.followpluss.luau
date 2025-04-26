@@ -1,5 +1,5 @@
 -- Only used for display reasons
-local version: string = "1.7.2"
+local version: string = "1.8.0"
 metadata = {
 	name = "Follow Pluss",
 	description = "A Highly Customisable Multitool for all your Follow Needs, including but not limited to: 5 different Camera Modes, 2 Auto Cameras, Replay Compatability, and More!",
@@ -2777,23 +2777,4 @@ end
 --[[
 	The camera currently gets about 40fps less than freecam in most areas.
 	Steps to get our frames back are to remove as many loops as possible.
-]]
-
--- Goal Cam Rework:
---[[
-	Get rid of the old static position method
-	Create a new method that follows these principals:
-	- Always has the ball in frame
-	- Always has the player in frame
-	- Gives a great view of the surrounding area
-	- You should know the same info the goalie does if you were looking
-	- The camera should never go inside the goal (i.e cross the scoring line)
-	- Transitions back to the player should not be disorienting
-
-	Current Thought:
-	- Transition Enter when player is x distance from the goal
-	- Clip the camera inside the backboard (Pos offset: (3330, 0, 250))
-	- Have a FOV of 120
-	- Make the camera focus on the ball, rotating to face it when the camera.rotation:getForwradVector():dot(ballDirection) < 0.7 ca.
-	- Transition Leave when player is 1.25x distance from the goal
 ]]
