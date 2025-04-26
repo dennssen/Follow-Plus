@@ -1890,12 +1890,12 @@ function isInGoal(): boolean
 	local homeBox: BoxType = Box.new(
 		arena.homeGoal.position + (arena.rotation:getForwardVector() * 135),
 		Vec3.new(100, 500, 225),
-		arena.rotation:euler()
+		arena.rotation
 	)
 	local awayBox: BoxType = Box.new(
 		arena.awayGoal.position - (arena.rotation:getForwardVector() * 135),
 		Vec3.new(100, 500, 225),
-		arena.rotation:euler()
+		arena.rotation
 	)
 
 	if debugBallPrediction then
