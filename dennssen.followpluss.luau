@@ -2053,6 +2053,11 @@ function firstPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat)
 		position += offsetPosition
 	end
 
+	if offsetPosition == nil or offsetPosition == Vec3.zeroVector then
+		local offsetForMicFix = rotation:rotateVector(Vec3.new(0.01, 0, 0))
+		position += offsetForMicFix
+	end
+
 	local offsetDistance = getDist(headPosition, position)
 	if offsetDistance >= 50 then
 		camera.hideNearestHead = false
@@ -2673,13 +2678,6 @@ end
 --[[
 	The camera currently gets about 40fps less than freecam in most areas.
 	Steps to get our frames back are to remove as many loops as possible.
-]]
-
--- Face The Ball Cam Rework:
---[[
-	Create a box around the player with a small depth (thin chest)
-	find the closest point on the box surface to the ball.
-	Use the direction of the closest point and the ball.
 ]]
 
 -- Goal Cam Rework:
