@@ -1307,6 +1307,12 @@ Be able to grab the camera and throw it to change modes
 			Gui.text("Ball Arena: " .. tostring(ballArena))
 			Gui.treePop()
 		end
+		if Gui.treeNode("Arena") then
+			Gui.text("Arena Name: " .. arena.name)
+			Gui.text("Arena Position: " .. tostring(arena.position))
+			Gui.text("Arena Rotation: " .. tostring(arena.rotation:euler()))
+			Gui.treePop()
+		end
 		if Gui.treeNode("Other") then
 			Gui.text("Temporary Radius: " .. tostring(localRadius))
 			Gui.text("Distance: " .. tostring(distance))
