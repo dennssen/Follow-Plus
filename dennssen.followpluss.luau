@@ -873,7 +873,6 @@ function onGui()
 	end
 	Gui.setItemTooltip("The cameras field of view (FOV)")
 	cameraFOV = math.clamp(cameraFOV, 40, 179)
-	camera.fieldOfView = cameraFOV
 
 	positionSmoothing = Gui.sliderFloat(positionSmoothingLabel, positionSmoothing, 0, 1)
 	if not Gui.isItemActive() then
@@ -2366,6 +2365,7 @@ function withPlayer(player: ReplayPlayer)
 		cameraTransition = false
 	end
 
+	camera.fieldOfView = cameraFOV
 	if radius == 0 and cameraMode ~= CameraMode.HandHeld then
 		firstPerson(headPosition, cameraPositionOffset, headRotation * QuatFromVec3(cameraEulerOffset))
 	elseif cameraMode == CameraMode.HeadRotation then
@@ -2598,7 +2598,6 @@ function onMessageReceived(messageTable)
 	if messageTable.cameraFOV then
 		cameraFOV = messageTable.cameraFOV
 		cameraFOV = math.clamp(cameraFOV, 40, 179)
-		camera.fieldOfView = cameraFOV
 	end
 	-- positionSmoothing is a number that sets the cameras positions smoothing, the number can be set between 0.000 and 1.000
 	if messageTable.positionSmoothing then
