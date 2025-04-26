@@ -2690,4 +2690,11 @@ end
 	- You should know the same info the goalie does if you were looking
 	- The camera should never go inside the goal (i.e cross the scoring line)
 	- Transitions back to the player should not be disorienting
+
+	Current Thought:
+	- Transition Enter when player is x distance from the goal
+	- Clip the camera inside the backboard
+	- Have a FOV of 120
+	- Make the camera focus on the ball, rotating to face it when the camera.rotation:getForwradVector():dot(ballDirection) < 0.7 ca.
+	- Transition Leave when player is 1.25x distance from the goal
 ]]
