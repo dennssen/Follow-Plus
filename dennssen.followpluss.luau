@@ -841,7 +841,6 @@ function onGui()
 		nametagsLabel = generateAsterisk("Nametags", showNameTags ~= profile.showNameTags)
 	end
 	Gui.setItemTooltip("Enable or disable nametags for all players")
-	camera.showNameTags = showNameTags
 
 	isLeftHanded = Gui.checkbox(isLeftHandedLabel, isLeftHanded)
 	if not Gui.isItemActive() then
@@ -2352,6 +2351,7 @@ function handHeld(player: ReplayPlayer)
 end
 
 function withPlayer(player: ReplayPlayer)
+	camera.showNameTags = showNameTags
 	local homeGoal = arena.home.goal
 	local awayGoal = arena.away.goal
 
@@ -2777,4 +2777,12 @@ end
 --[[
 	The camera currently gets about 40fps less than freecam in most areas.
 	Steps to get our frames back are to remove as many loops as possible.
+]]
+
+-- Auto Record Replay:
+--[[
+	When the ball is placed in the middle, start replay recording.
+	When the ball is placed in the middle again, stop and start a new replay recording.
+	If the follow player leaves the arena, stop replay recording.
+	If you exit the camera, stop replay recording.
 ]]
