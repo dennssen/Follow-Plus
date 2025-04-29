@@ -1565,7 +1565,7 @@ function updatePlayerData(player: ReplayPlayer, frame: ReplayFrame)
 		arena = getClosestArena(player.root.position)
 	end
 
-	teamLists(frame)
+	--teamLists(frame)
 end
 
 function mouseRotationOffset()
@@ -2778,8 +2778,14 @@ end
 
 -- Optimizations:
 --[[
-	The camera currently gets about 40fps less than freecam in most areas.
-	Steps to get our frames back are to remove as many loops as possible.
+	fps needs more testing. Previous assumptions of 40fps lower than freecam has not been replicated.
+	current utilization testing has not found any hickups in the code.
+]]
+
+-- Mute self fixes:
+--[[
+	Supposedly cracks in the code where muting still won't work.
+	Needs fixing.
 ]]
 
 -- Auto Record Replay:
