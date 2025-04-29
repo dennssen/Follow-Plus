@@ -872,43 +872,46 @@ function onGui()
 
 	if listActive then
 		Gui.indent()
-		Gui.beginListBox("Player List")
-		for i = 1, #frame.players do
-			local player = frame.players[i]
-			local isSelected = false
+		if Gui.beginListBox("Player List") then
+			for i = 1, #frame.players do
+				local player = frame.players[i]
+				local isSelected = false
 
-			if player.playerName == targetPlayerName then
-				isSelected = true
-			end
-
-			if targetPlayer then
-				if
-					targetPlayer.playerName ~= targetPlayerName
-					and not string.find(string.lower(player.playerName), string.lower(targetPlayerName))
-				then
-					continue
+				if player.playerName == targetPlayerName then
+					isSelected = true
 				end
-			else
+
+				if targetPlayer then
+					if
+						targetPlayer.playerName ~= targetPlayerName
+						and not string.find(string.lower(player.playerName), string.lower(targetPlayerName))
+					then
+						continue
+					end
+				else
+					if
+						not string.find(string.lower(player.playerName), string.lower(targetPlayerName))
+						and targetPlayerName ~= "YourName"
+					then
+						continue
+					end
+				end
+
 				if
-					not string.find(string.lower(player.playerName), string.lower(targetPlayerName))
-					and targetPlayerName ~= "YourName"
+					Gui.selectable(tostring(player.playerName) .. "[" .. tostring(player.playerId) .. "]", isSelected)
 				then
-					continue
+					Settings.mutePlayerByName(targetPlayerName, false) -- unmute followed player before switch
+					isSelfMuted = not muteSelf
+					playerSwitchTime = os.clock()
+					teammatesList = {}
+					lastTeammatesList = {}
+					targetPlayerName = player.playerName
+					targetPlayerId = player.playerId
+					teamIndex = TeamIndex.NoTeam
 				end
 			end
-
-			if Gui.selectable(tostring(player.playerName) .. "[" .. tostring(player.playerId) .. "]", isSelected) then
-				Settings.mutePlayerByName(targetPlayerName, false) -- unmute followed player before switch
-				isSelfMuted = not muteSelf
-				playerSwitchTime = os.clock()
-				teammatesList = {}
-				lastTeammatesList = {}
-				targetPlayerName = player.playerName
-				targetPlayerId = player.playerId
-				teamIndex = TeamIndex.NoTeam
-			end
+			Gui.endListBox()
 		end
-		Gui.endListBox()
 
 		if Gui.button(Icon.ArrowLeft) then
 			listActive = false
