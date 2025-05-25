@@ -2122,7 +2122,7 @@ end
 
 function firstPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat)
 	if not cameraTransition then
-		toggleSmoothing(false, false)
+		toggleSmoothing(false, true)
 	end
 
 	if offsetPosition ~= nil then
