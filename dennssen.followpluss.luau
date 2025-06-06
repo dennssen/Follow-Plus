@@ -406,16 +406,16 @@ function Box:render(r: number, g: number, b: number): ()
 		{ start = self.vertexLocations[6], finish = self.vertexLocations[8] },
 	}
 
-	World.drawPoint(self.position, 0.2, 3, 0.2, 5, 0)
+	WorldDraw.drawPoint(self.position, 0.2, 3, 0.2, 5, 0)
 	for i: number, line: { start: Vec3, finish: Vec3 } in lines do
-		World.drawLine(line.start, line.finish, r, g, b, 4, 0)
+		WorldDraw.drawLine(line.start, line.finish, r, g, b, 4, 0)
 	end
 
 	local minSize = math.max(math.min(self.size.x, self.size.y, self.size.z), 10)
 
-	World.drawLine(self.position, self.position + self.rotation:getForwardVector() * minSize, 1, 0, 0, 2.5, 0)
-	World.drawLine(self.position, self.position + self.rotation:getUpVector() * minSize, 0, 1, 0, 2.5, 0)
-	World.drawLine(self.position, self.position + self.rotation:getRightVector() * minSize, 0, 0, 1, 2.5, 0)
+	WorldDraw.drawLine(self.position, self.position + self.rotation:getForwardVector() * minSize, 1, 0, 0, 2.5, 0)
+	WorldDraw.drawLine(self.position, self.position + self.rotation:getUpVector() * minSize, 0, 1, 0, 2.5, 0)
+	WorldDraw.drawLine(self.position, self.position + self.rotation:getRightVector() * minSize, 0, 0, 1, 2.5, 0)
 end
 
 function Box:checkPointIntersect(point: Vec3): boolean
@@ -711,8 +711,12 @@ function updateVariables(profileName)
 end
 
 function onTransitionBegin()
+	if camera.isFollowed then
+		toggleSmoothing(false, false)
+	end
+
 	alwaysTick = true
-	World.clear()
+	WorldDraw.clear()
 	if wasFollowed then
 		wasFollowed = false
 		updateVariables(lastUsedProfile)
@@ -777,8 +781,9 @@ end
 
 function getReplayFrameFromIndex(replayIndex)
 	replayIndex = math.clamp(replayIndex, 0, #Replay.listLoaded())
-	if replayIndex > 0 and Replay.getByIndex(replayIndex) then
-		return Replay.getByIndex(replayIndex):getCurrentFrame(true)
+	local replay = Replay.getByIndex(replayIndex)
+	if replay then
+		return replay:getCurrentFrame(true)
 	else
 		-- 0 = live game
 		return getGameData()
@@ -1616,7 +1621,7 @@ function faceTheBallPivotPosition(position: Vec3, playerBox: BoxType, ballPositi
 	radius *= 10
 
 	if debugFaceTheBall then
-		World.drawLine(closestPointToBall, closestPointToBall + (direction * 50), 0, 1, 0, 10, 0)
+		WorldDraw.drawLine(closestPointToBall, closestPointToBall + (direction * 50), 0, 1, 0, 10, 0)
 	end
 
 	faceTheBallPosition = position + -direction * radius
@@ -1927,7 +1932,7 @@ function calculatePrediction(dt: number)
 
 		-- draw normals
 		if debugBallPrediction then
-			World.drawLine(
+			WorldDraw.drawLine(
 				hit.position + ballRadiusOffset,
 				hit.position + ballRadiusOffset + (hit.normal * 100),
 				1,
@@ -1990,7 +1995,7 @@ function predictBall()
 	local dt = 0.1
 
 	if debugBallPrediction and true then
-		World.clear()
+		WorldDraw.clear()
 	end
 
 	nowPosition = ballPosition
@@ -2008,8 +2013,8 @@ function predictBall()
 	calculatePrediction(dt)
 
 	if debugBallPrediction and true then
-		--World.drawPoint(nextPosition, 1, 0, 0, 50, 0)
-		World.drawLine(ballPosition, nextPosition, 1, 0, 0, 10, 0)
+		--WorldDraw.drawPoint(nextPosition, 1, 0, 0, 50, 0)
+		WorldDraw.drawLine(ballPosition, nextPosition, 1, 0, 0, 10, 0)
 	end
 
 	for i = 1, 50, 1 do
@@ -2024,8 +2029,8 @@ function predictBall()
 		calculatePrediction(dt)
 
 		if debugBallPrediction and true then
-			--World.drawPoint(nextPosition, 0, 1, 0, 50, 0)
-			World.drawLine(nowPosition, nextPosition, 0, 1, 0, 10, 0)
+			--WorldDraw.drawPoint(nextPosition, 0, 1, 0, 50, 0)
+			WorldDraw.drawLine(nowPosition, nextPosition, 0, 1, 0, 10, 0)
 		end
 	end
 
@@ -2238,7 +2243,7 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 		Box.new(player.root.position + verticalOffset + horizontalOffset, Vec3.new(5, 50, 100), playerChestRotation)
 
 	if debugFaceTheBall then
-		World.clear()
+		WorldDraw.clear()
 		playerBox:render(0.7, 0.15, 0.15)
 	end
 
