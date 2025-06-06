@@ -1,5 +1,5 @@
 -- Only used for display reasons
-local version: string = "1.8.0"
+local version: string = "1.8.1"
 metadata = {
 	name = "Follow Pluss",
 	description = "A Highly Customisable Multitool for all your Follow Needs, including but not limited to: 5 different Camera Modes, 2 Auto Cameras, Replay Compatability, and More!",
