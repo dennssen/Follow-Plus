@@ -1,5 +1,5 @@
 -- Only used for display reasons
-local version: string = "1.8.1"
+local version: string = "1.8.2"
 metadata = {
 	name = "Follow Pluss",
 	description = "A Highly Customisable Multitool for all your Follow Needs, including but not limited to: 5 different Camera Modes, 2 Auto Cameras, Replay Compatability, and More!",
@@ -790,6 +790,20 @@ function getReplayFrameFromIndex(replayIndex)
 	end
 end
 
+-- does not actually set the target player, but the info such as the targetPlayerId will be used to set the targetPlayer in the tick function.
+function updateTargetedPlayer(player: ReplayPlayer)
+	Settings.mutePlayerByName(targetPlayerName, false) -- unmute followed player before switch
+	camera:showQuestsForPlayerById(targetPlayerId, false) -- disable quests for the current player before switching
+	isSelfMuted = not muteSelf
+	playerSwitchTime = os.clock()
+	teammatesList = {}
+	lastTeammatesList = {}
+
+	targetPlayerName = player.playerName
+	targetPlayerId = player.playerId
+	teamIndex = TeamIndex.NoTeam
+end
+
 function onGui()
 	local readLocationString = ""
 	if readLocation > 0 then
@@ -905,14 +919,7 @@ function onGui()
 				if
 					Gui.selectable(tostring(player.playerName) .. "[" .. tostring(player.playerId) .. "]", isSelected)
 				then
-					Settings.mutePlayerByName(targetPlayerName, false) -- unmute followed player before switch
-					isSelfMuted = not muteSelf
-					playerSwitchTime = os.clock()
-					teammatesList = {}
-					lastTeammatesList = {}
-					targetPlayerName = player.playerName
-					targetPlayerId = player.playerId
-					teamIndex = TeamIndex.NoTeam
+					updateTargetedPlayer(player)
 				end
 			end
 			Gui.endListBox()
@@ -2606,6 +2613,10 @@ function configureVOIP()
 	lastFocusedArena = focusedArena
 end
 
+function showQuests(player: ReplayPlayer)
+	camera:showQuestsForPlayerById(player.playerId, true)
+end
+
 function tick(dt)
 	if not camera.isActive and not camera.isFollowed then
 		alwaysTick = false
@@ -2650,6 +2661,7 @@ function tick(dt)
 	updateBallData(ball, dt)
 	withPlayer(targetPlayer)
 	configureVOIP()
+	showQuests(targetPlayer)
 	previousCameraMode = cameraMode
 	previousTargetPlayerId = targetPlayerId
 end
@@ -2780,12 +2792,6 @@ function onMessageReceived(messageTable)
 		camera.hideNearestHead = messageTable.hideNearestHead
 	end
 end
-
--- Optimizations:
---[[
-	fps needs more testing. Previous assumptions of 40fps lower than freecam has not been replicated.
-	current utilization testing has not found any hickups in the code.
-]]
 
 -- Mute self fixes:
 --[[
