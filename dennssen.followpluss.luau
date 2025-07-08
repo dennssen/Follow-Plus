@@ -2,7 +2,7 @@
 local version: string = "1.8.2"
 metadata = {
 	name = "Follow Pluss",
-	description = "A Highly Customisable Multitool for all your Follow Needs, including but not limited to: 5 different Camera Modes, 2 Auto Cameras, Replay Compatability, and More!",
+	description = "A highly customisable multitool for all your following needs, including but not limited to: 5 different Camera Modes, 2 Auto Cameras, Replay Compatability, and More!",
 	author = "Dennssen",
 	defaultKeybind = "F",
 }
@@ -2700,13 +2700,40 @@ function onExit()
 	muteAll(false)
 end
 
-function onMessageReceived(messageTable)
+type MessageValues = {
+	callback: (() -> ()) -> ()?,
+	readLocation: number?,
+	showNameTags: boolean?,
+	isLeftHanded: boolean?,
+	muteSelf: boolean?,
+	targetPlayer: ReplayPlayer?,
+	targetPlayerName: string?,
+	positionSmoothing: number?,
+	cameraFOV: number?,
+	cameraMode: number?,
+	radius: number?,
+	threshold: number?,
+	cameraPositionOffset: string?,
+	cameraEulerOffset: string?,
+	gestureControls: boolean?,
+	forwardGestureMode: number?,
+	upGestureMode: number?,
+	backwardsGestureMode: number?,
+	autoBall: boolean?,
+	autoBallThreshold: number?,
+	autoGoalCam: boolean?,
+	ballGoalMode: number?,
+	goalMode: number?,
+	hideNearestHead: boolean?,
+}
+
+function onMessageReceived(messageTable: MessageValues)
 	-- only accept tables
 	if type(messageTable) ~= "table" then
 		return
 	end
 
-	-- receiving a msg will be interperated as the camera being followed
+	-- I set wasFollowed to true if a message was recieved to make sure the variables get reset once the camera is used standalone again
 	wasFollowed = true
 
 	-- callback is a function that takes this cameras GUI as a parameter to receive for the messenger. This is usefull for displaying the same GUI in multiple cameras.
@@ -2728,6 +2755,10 @@ function onMessageReceived(messageTable)
 	-- muteSelf is a boolean that when set to true makes the camera unable to hear the followed player talk in game.
 	if messageTable.muteSelf ~= nil then
 		muteSelf = messageTable.muteSelf
+	end
+	-- targetPlayer is a ReplayPlayer of the player the camera will follow. By setting targetPlayer it will attempt to switch to that player. If the player doesn't exist it will keep the current player as the targetPlayer.
+	if messageTable.targetPlayer then
+		setTargetPlayer(messageTable.targetPlayer)
 	end
 	-- targetPlayerName is a string used for getting the player you want to follow. if this is empty or unable to find the name typed in it follows noone.
 	if messageTable.targetPlayerName then
