@@ -965,7 +965,7 @@ function onGui()
 			Gui.endListBox()
 		end
 
-		if Gui.button(Icon.ArrowLeft) then
+		if Gui.button(Icon.Check) then
 			listActive = false
 		end
 		Multispacing(25)
@@ -973,6 +973,7 @@ function onGui()
 		if Gui.button(Icon.Trash) then
 			clearTargetPlayer()
 		end
+		Gui.setItemTooltip("Clear Follow Player")
 
 		Gui.unindent()
 	end
