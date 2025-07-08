@@ -560,10 +560,9 @@ local goalModeLabel = "Mode"
 local distanceLerpLabel = "Player/Ball Ratio"
 
 -- player
-local targetPlayer = nil
+local targetPlayer: ReplayPlayer? = nil
 local targetPlayerName = profile.targetPlayerName
 local previousTargetPlayerId = -1
-local targetPlayerId = -1
 local headPosition: Vec3 = Vec3.new(0, 0, 0)
 local headRotation: Quat = Quat.identity
 local playerVelocity = Vec3.zeroVector
@@ -686,7 +685,6 @@ local yMouse = Input.Key.MouseY
 local debugFaceTheBall: boolean = false
 
 function updateVariables(profileName)
-	targetPlayerId = -1
 	targetPlayer = nil
 	isSelfMuted = false
 
@@ -790,18 +788,30 @@ function getReplayFrameFromIndex(replayIndex)
 	end
 end
 
--- does not actually set the target player, but the info such as the targetPlayerId will be used to set the targetPlayer in the tick function.
-function updateTargetedPlayer(player: ReplayPlayer)
-	Settings.mutePlayerByName(targetPlayerName, false) -- unmute followed player before switch
-	camera:showQuestsForPlayerById(targetPlayerId, false) -- disable quests for the current player before switching
-	isSelfMuted = not muteSelf
-	playerSwitchTime = os.clock()
-	teammatesList = {}
-	lastTeammatesList = {}
+function setTargetPlayer(player: ReplayPlayer?)
+	if not player then
+		return
+	end
 
+	if targetPlayer and targetPlayer.playerId == player.playerId then
+		return
+	end
+
+	if targetPlayer then
+		Settings.mutePlayerByName(targetPlayer.playerName, false)
+		camera:showQuestsForPlayerById(targetPlayer.playerId, false)
+		isSelfMuted = not muteSelf
+		playerSwitchTime = os.clock()
+		teammatesList = {}
+		lastTeammatesList = {}
+	end
+
+	if true then -- show quests
+		camera:showQuestsForPlayerById(player.playerId, true)
+	end
+
+	targetPlayer = player
 	targetPlayerName = player.playerName
-	targetPlayerId = player.playerId
-	teamIndex = TeamIndex.NoTeam
 end
 
 function onGui()
@@ -898,6 +908,7 @@ function onGui()
 
 				if player.playerName == targetPlayerName then
 					isSelected = true
+					setTargetPlayer(player)
 				end
 
 				if targetPlayer then
@@ -919,7 +930,7 @@ function onGui()
 				if
 					Gui.selectable(tostring(player.playerName) .. "[" .. tostring(player.playerId) .. "]", isSelected)
 				then
-					updateTargetedPlayer(player)
+					setTargetPlayer(player)
 				end
 			end
 			Gui.endListBox()
@@ -1567,6 +1578,7 @@ function registeredOffsetHit(position: Vec3, offset: Vec3): Vec3
 end
 
 function updatePlayerData(player: ReplayPlayer, frame: ReplayFrame)
+	targetPlayer = frame:getPlayerById(player.playerId)
 	playerVelocity = player.velocity
 	isLocalPlayer = player.isLocalPlayer
 	playerNameInfo = player.playerName
@@ -2439,11 +2451,15 @@ function withPlayer(player: ReplayPlayer)
 	end
 
 	if autoBall then
-		if ballVelocity:length() > 100 * autoBallThreshold and not ballTarget and teamIndex ~= TeamIndex.NoTeam then
+		if
+			ballVelocity:length() > 100 * autoBallThreshold
+			and not ballTarget
+			and player.teamIndex ~= TeamIndex.NoTeam
+		then
 			ballTarget = true
 		end
 
-		if ballVelocity:length() < 500 and ballTarget or teamIndex == TeamIndex.NoTeam then
+		if ballVelocity:length() < 500 and ballTarget or player.teamIndex == TeamIndex.NoTeam then
 			timeInGoal = 0
 			ballTarget = false
 			wasInGoal = false
@@ -2473,7 +2489,7 @@ function withPlayer(player: ReplayPlayer)
 	headRotation = player.head.rotation
 	headPosition = player.head.position
 
-	if previousCameraMode ~= cameraMode or previousTargetPlayerId ~= targetPlayerId then
+	if previousCameraMode ~= cameraMode or previousTargetPlayerId ~= player.playerId then
 		toggleSmoothing(false, false)
 		cameraTransition = true
 	elseif cameraTransition then
@@ -2488,7 +2504,7 @@ function withPlayer(player: ReplayPlayer)
 	elseif cameraMode == CameraMode.VelocityRotation then
 		thirdPersonVelocity(headPosition, player.velocity, headRotation)
 	elseif cameraMode == CameraMode.FaceTheBall then
-		if teamIndex ~= TeamIndex.NoTeam then
+		if player.teamIndex ~= TeamIndex.NoTeam then
 			thirdPersonFacingBall(player, Vec3.zeroVector)
 		else
 			thirdPerson(headPosition, cameraPositionOffset, headRotation, false)
@@ -2513,6 +2529,10 @@ end
 
 function configureVOIP()
 	local frame = getGameData() -- always do VOIP on live data | Replays don't have VOIP
+
+	if not targetPlayer then
+		return
+	end
 
 	if not focusedArena and lastFocusedArena then
 		-- focused arena got turned off
@@ -2613,10 +2633,6 @@ function configureVOIP()
 	lastFocusedArena = focusedArena
 end
 
-function showQuests(player: ReplayPlayer)
-	camera:showQuestsForPlayerById(player.playerId, true)
-end
-
 function tick(dt)
 	if not camera.isActive and not camera.isFollowed then
 		alwaysTick = false
@@ -2627,23 +2643,7 @@ function tick(dt)
 	deltaTime = dt
 	local frame = getReplayFrameFromIndex(readLocation)
 
-	if #frame.players == 0 or (targetPlayerId == -1 and (targetPlayerName == nil or targetPlayerName == "")) then
-		noPlayerOrbit(dt)
-		return
-	end
-
-	if targetPlayerId > -1 then
-		targetPlayer = frame:getPlayerById(targetPlayerId)
-	end
-
-	if targetPlayer == nil then
-		targetPlayer = frame:getPlayerByName(targetPlayerName)
-		if targetPlayer then
-			targetPlayerId = targetPlayer.playerId
-		end
-	end
-
-	if targetPlayer == nil then
+	if #frame.players == 0 or not targetPlayer then
 		noPlayerOrbit(dt)
 		return
 	end
@@ -2661,15 +2661,19 @@ function tick(dt)
 	updateBallData(ball, dt)
 	withPlayer(targetPlayer)
 	configureVOIP()
-	showQuests(targetPlayer)
 	previousCameraMode = cameraMode
-	previousTargetPlayerId = targetPlayerId
+	previousTargetPlayerId = targetPlayer.playerId
 end
 
 function onExit()
 	camera.showNameTags = true
 	camera.hideNearestHead = false
 	camera.nearClippingPlane = 0.001
+
+	if targetPlayer and true then -- show quests
+		camera:showQuestsForPlayerById(targetPlayer.playerId, false)
+	end
+
 	muteAll(false)
 end
 
@@ -2704,15 +2708,8 @@ function onMessageReceived(messageTable)
 	end
 	-- targetPlayerName is a string used for getting the player you want to follow. if this is empty or unable to find the name typed in it follows noone.
 	if messageTable.targetPlayerName then
-		if messageTable.targetPlayerName ~= targetPlayerName then
-			targetPlayerId = -1
-			targetPlayer = nil
-		end
 		targetPlayerName = messageTable.targetPlayerName
-	end
-	-- targetPlayerId is a number used for getting the player you want to follow. If anything bigger than -1 this will be used instead of targetPlayerName if it finds a player with the corresponding ID.
-	if messageTable.targetPlayerId then
-		targetPlayerId = messageTable.targetPlayerId
+		setTargetPlayer(getReplayFrameFromIndex(readLocation):getPlayerByName(messageTable.targetPlayerName))
 	end
 	-- cameraFOV is a number that sets the camera FOV, the number can be set between 40 and 179
 	if messageTable.cameraFOV then
