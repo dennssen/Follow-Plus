@@ -728,6 +728,13 @@ function onTransitionBegin()
 	end
 end
 
+function Multispacing(amount: number)
+	for i = 1, amount, 1 do
+		Gui.sameLine()
+		Gui.spacing()
+	end
+end
+
 function generateAsterisk(guiLabel: string, isEdited: boolean): string
 	if isEdited then
 		return `{guiLabel}(*)`
@@ -812,6 +819,17 @@ function setTargetPlayer(player: ReplayPlayer?)
 
 	targetPlayer = player
 	targetPlayerName = player.playerName
+end
+
+function clearTargetPlayer()
+	if targetPlayer then
+		Settings.mutePlayerByName(targetPlayer.playerName, false)
+		camera:showQuestsForPlayerById(targetPlayer.playerId, false)
+		isSelfMuted = not muteSelf
+
+		targetPlayerName = ""
+		targetPlayer = nil
+	end
 end
 
 function onGui()
@@ -938,6 +956,11 @@ function onGui()
 
 		if Gui.button(Icon.ArrowLeft) then
 			listActive = false
+		end
+		Multispacing(25)
+		Gui.sameLine()
+		if Gui.button(Icon.Trash) then
+			clearTargetPlayer()
 		end
 
 		Gui.unindent()
