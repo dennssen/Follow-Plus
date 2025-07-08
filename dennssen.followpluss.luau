@@ -1,5 +1,5 @@
 -- Only used for display reasons
-local version: string = "1.8.3"
+local version: string = "1.8.4"
 metadata = {
 	name = "Follow Pluss",
 	description = "A highly customisable multitool for all your following needs, including but not limited to: 5 different Camera Modes, 2 Auto Cameras, Replay Compatability, and More!",
@@ -2739,6 +2739,7 @@ type MessageValues = {
 	ballGoalMode: number?,
 	goalMode: number?,
 	hideNearestHead: boolean?,
+	showQuests: boolean?,
 }
 
 function onMessageReceived(messageTable: MessageValues)
@@ -2855,6 +2856,10 @@ function onMessageReceived(messageTable: MessageValues)
 	end
 	if messageTable.hideNearestHead then
 		camera.hideNearestHead = messageTable.hideNearestHead
+	end
+	-- showQuests is a boolean that shows quests for the followed player
+	if messageTable.showQuests then
+		showQuests = messageTable.showQuests
 	end
 end
 

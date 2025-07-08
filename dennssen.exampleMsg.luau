@@ -30,6 +30,8 @@ type MessageValues = {
 	autoGoalCam: boolean?,
 	ballGoalMode: number?,
 	goalMode: number?,
+	hideNearestHead: boolean?,
+	showQuests: boolean?,
 }
 
 -- store the camera for easy access
@@ -99,6 +101,7 @@ local defaultValues: MessageValues = {
 	ballGoalMode = BallGoalMode.EnemyGoal, -- sets the ball goal mode to Enemy Goal making it so the auto shooting camera only activates when the ball is being shot at the enemy goal.
 	autoGoalCam = false, -- disables the auto goal camera.
 	goalMode = GoalMode.BothGoals, -- sets the auto goal camera to activate when near both goals, instead of only your own teams goal.
+	showQuests = false, -- disables visable quests for the followed player.
 }
 
 -- none of these values are needed, if any are left out they stay as they are. This means you only have to change the values you care about.
