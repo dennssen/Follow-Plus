@@ -1,5 +1,5 @@
 -- Only used for display reasons
-local version: string = "1.8.2"
+local version: string = "1.8.3"
 metadata = {
 	name = "Follow Pluss",
 	description = "A highly customisable multitool for all your following needs, including but not limited to: 5 different Camera Modes, 2 Auto Cameras, Replay Compatability, and More!",
@@ -83,6 +83,7 @@ local function initializeProfiles()
 		backwardsGestureMode = CameraMode.HeadRotation,
 		focusedArena = false,
 		isLeftHanded = false,
+		showQuests = true,
 	}
 
 	-- remove every value in the root of the config that isn't profiles or lastUsedProfile
@@ -500,6 +501,7 @@ camera.positionSmoothing = positionSmoothing
 local rotationSmoothing = 0.1
 camera.rotationSmoothing = rotationSmoothing
 camera.hideNearestHead = false
+local showQuests: boolean = profile.showQuests
 local previousCameraMode: number = profile.cameraMode
 local cameraMode: number = profile.cameraMode
 local cameraModes = { "First Person", "Head Rotation", "Velocity Rotation", "Face the Ball", "Hand Held" }
@@ -539,6 +541,7 @@ local gameDataLabel = "Game Data"
 local nametagsLabel = "Nametags"
 local isLeftHandedLabel = "Left Handed"
 local muteSelfLabel = "Mute Self"
+local showQuestsLabel = "Show Quests"
 local focusedArenaLabel = "Focused Arenas"
 local targetPlayerNameLabel = "Follow Player"
 local cameraFOVLabel = "Field Of View"
@@ -889,17 +892,25 @@ function onGui()
 	end
 	Gui.setItemTooltip("Enable or disable nametags for all players")
 
-	isLeftHanded = Gui.checkbox(isLeftHandedLabel, isLeftHanded)
+	Gui.sameLine()
+	showQuests = Gui.checkbox(showQuestsLabel, showQuests)
 	if not Gui.isItemActive() then
-		isLeftHandedLabel = generateAsterisk("Left Handed", isLeftHanded ~= profile.isLeftHanded)
+		showQuestsLabel = generateAsterisk("Show Quests", showQuests ~= profile.showQuests)
 	end
-	Gui.setItemTooltip("Makes you left handed | Used for Hand Held mode")
+	Gui.setItemTooltip("Will show the quest for the followed player when they activate a quest")
 
 	muteSelf = Gui.checkbox(muteSelfLabel, muteSelf)
 	if not Gui.isItemActive() then
 		muteSelfLabel = generateAsterisk("Mute Self", muteSelf ~= profile.muteSelf)
 	end
 	Gui.setItemTooltip("Enable or disable muting yourself or the player you are currently following")
+
+	Gui.sameLine()
+	isLeftHanded = Gui.checkbox(isLeftHandedLabel, isLeftHanded)
+	if not Gui.isItemActive() then
+		isLeftHandedLabel = generateAsterisk("Left Handed", isLeftHanded ~= profile.isLeftHanded)
+	end
+	Gui.setItemTooltip("Makes you left handed | Used for Hand Held mode")
 
 	--[[focusedArena = Gui.checkbox(focusedArenaLabel, focusedArena)
 	if not Gui.isItemActive() then
@@ -1281,6 +1292,7 @@ Be able to grab the camera and throw it to change modes
 					cameraEulerOffset = tostring(cameraEulerOffset),
 					cameraPositionOffset = tostring(cameraPositionOffset),
 					isLeftHanded = isLeftHanded,
+					showQuests = showQuests,
 				}
 				lastUsedProfile = newProfileName
 				config.lastUsedProfile = lastUsedProfile
@@ -1349,6 +1361,7 @@ Be able to grab the camera and throw it to change modes
 				cameraEulerOffset = tostring(cameraEulerOffset),
 				cameraPositionOffset = tostring(cameraPositionOffset),
 				isLeftHanded = isLeftHanded,
+				showQuests = showQuests,
 			}
 			profile = config.profiles[lastUsedProfile]
 			saveConfig()
