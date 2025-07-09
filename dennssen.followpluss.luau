@@ -1,5 +1,5 @@
 -- Only used for display reasons
-local version: string = "1.8.4"
+local version: string = "1.8.5"
 metadata = {
 	name = "Follow Pluss",
 	description = "A highly customisable multitool for all your following needs, including but not limited to: 5 different Camera Modes, 2 Auto Cameras, Replay Compatability, and More!",
@@ -688,9 +688,7 @@ local yMouse = Input.Key.MouseY
 local debugFaceTheBall: boolean = false
 
 function updateVariables(profileName)
-	targetPlayer = nil
 	isSelfMuted = false
-
 	profile = config.profiles[profileName]
 	radius = profile.radius
 	distanceLerp = profile.distanceLerp
@@ -709,6 +707,8 @@ function updateVariables(profileName)
 	ballGoalMode = profile.ballGoalMode
 	cameraEulerOffset = stringToVec3(profile.cameraEulerOffset)
 	cameraPositionOffset = stringToVec3(profile.cameraPositionOffset)
+
+	setTargetPlayer(getReplayFrameFromIndex(readLocation):getPlayerByName(targetPlayerName))
 end
 
 function onTransitionBegin()
@@ -718,6 +718,11 @@ function onTransitionBegin()
 
 	alwaysTick = true
 	WorldDraw.clear()
+
+	if not targetPlayer then
+		setTargetPlayer(getReplayFrameFromIndex(readLocation):getPlayerByName(targetPlayerName))
+	end
+
 	if wasFollowed then
 		wasFollowed = false
 		updateVariables(lastUsedProfile)
