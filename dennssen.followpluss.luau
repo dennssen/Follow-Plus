@@ -1,5 +1,5 @@
 -- Only used for display reasons
-local version: string = "1.8.5"
+local _version: string = "1.8.5"
 metadata = {
 	name = "Follow Pluss",
 	description = "A highly customisable multitool for all your following needs, including but not limited to: 5 different Camera Modes, 2 Auto Cameras, Replay Compatability, and More!",
@@ -1437,7 +1437,7 @@ Be able to grab the camera and throw it to change modes
 			Gui.text("Ball Distance: " .. tostring(getDist(headPosition, ballPosition)))
 			Gui.treePop()
 		end
-		Gui.text("Version: " .. version)
+		Gui.text("Version: " .. _version)
 
 		Gui.newLine()
 		Gui.unindent()
@@ -2720,6 +2720,7 @@ function onExit()
 end
 
 type MessageValues = {
+	versionCallback: (string) -> ()?,
 	callback: (() -> ()) -> ()?,
 	readLocation: number?,
 	showNameTags: boolean?,
@@ -2756,6 +2757,9 @@ function onMessageReceived(messageTable: MessageValues)
 	-- I set wasFollowed to true if a message was recieved to make sure the variables get reset once the camera is used standalone again
 	wasFollowed = true
 
+	if messageTable.versionCallback ~= nil then
+		messageTable.versionCallback(_version)
+	end
 	-- callback is a function that takes this cameras GUI as a parameter to receive for the messenger. This is usefull for displaying the same GUI in multiple cameras.
 	if messageTable.callback ~= nil then
 		messageTable.callback(onGui())

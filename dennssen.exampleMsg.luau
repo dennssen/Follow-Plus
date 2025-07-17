@@ -7,6 +7,7 @@ metadata = {
 
 -- creating a custom message variable/function forcing this type creates a better programming experience and ensures you are typing the variables correctly
 type MessageValues = {
+	versionCallback: (string) -> ()?,
 	callback: (() -> ()) -> ()?,
 	readLocation: number?,
 	showNameTags: boolean?,
@@ -122,13 +123,24 @@ function guiCallback(func: () -> ())
 	followPlussGui = func
 end
 
-local askForCallback: MessageValues = { -- using variables with message types makes it easier to type the correct values
+local askForGui: MessageValues = { -- using variables with message types makes it easier to type the correct values
 	callback = guiCallback,
+}
+
+local followPlussVersion: string = ""
+
+function versionCallback(version: string)
+	followPlussVersion = version
+end
+
+local askForVersion: MessageValues = {
+	versionCallback = versionCallback,
 }
 
 function main()
 	-- the main function is the EARLIEST point you can get another spectatorCamera without causing issues (e.i don't call getCamera during initialization)
 	followPlussCamera = getCameraById("dennssen.followpluss")
+	sendMessage(followPlussCamera, askForVersion)
 end
 
 function onTransitionBegin(transitionInfo: Transition)
@@ -141,12 +153,12 @@ end
 function onGui()
 	Gui.text("This is the default GUI")
 	Gui.text("everything after this text is captured from followpluss GUI")
-
+	Gui.text(`You are using version {followPlussVersion} of follow pluss`)
 	if followPlussGui ~= nil then
 		followPlussGui()
 	else
 		-- send call to receive gui if it hasn't already got it
-		sendMessage(followPlussCamera, askForCallback)
+		sendMessage(followPlussCamera, askForGui)
 	end
 
 	-- if there are certaint values you want to restrict the player from changing in the GUI you can override them manually at the end of the onGui function to ensure their wanted value
