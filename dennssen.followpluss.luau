@@ -812,7 +812,7 @@ function Arena4v4.new(gamemode: ModuleStateSpectatorLuaApi): Arena
 	local self = setmetatable(Arena.new(gamemode), Arena4v4)
 	self.type = "4v4"
 	self.name = `Jakeball {self.slotId:sub(self.slotId:len() - 2)}`
-	self:setupOverviews()
+	self:setupDimensions()
 	return self
 end
 
@@ -1189,6 +1189,10 @@ function updateVariables(profileName)
 	cameraPositionOffset = stringToVec3(profile.cameraPositionOffset)
 
 	setTargetPlayer(getReplayFrameFromIndex(readLocation):getPlayerByName(targetPlayerName))
+end
+
+function main()
+	arenaLoadTime = os.clock()
 end
 
 function onTransitionBegin()
@@ -3142,6 +3146,10 @@ function onMessageReceived(messageTable: MessageValues)
 	-- I set wasFollowed to true if a message was recieved to make sure the variables get reset once the camera is used standalone again
 	wasFollowed = true
 
+	-- showQuests is a boolean that shows quests for the followed player
+	if messageTable.showQuests ~= nil then
+		showQuests = messageTable.showQuests
+	end
 	if messageTable.versionCallback ~= nil then
 		messageTable.versionCallback(_version)
 	end
@@ -3248,12 +3256,8 @@ function onMessageReceived(messageTable: MessageValues)
 	if messageTable.goalMode then
 		goalMode = messageTable.goalMode
 	end
-	if messageTable.hideNearestHead then
+	if messageTable.hideNearestHead ~= nil then
 		camera.hideNearestHead = messageTable.hideNearestHead
-	end
-	-- showQuests is a boolean that shows quests for the followed player
-	if messageTable.showQuests then
-		showQuests = messageTable.showQuests
 	end
 end
 
