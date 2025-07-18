@@ -814,14 +814,16 @@ function setTargetPlayer(player: ReplayPlayer?)
 
 	if targetPlayer then
 		Settings.mutePlayerByName(targetPlayer.playerName, false)
-		camera:showQuestsForPlayerById(targetPlayer.playerId, false)
+		if showQuests then
+			camera:showQuestsForPlayerById(targetPlayer.playerId, false)
+		end
 		isSelfMuted = not muteSelf
 		playerSwitchTime = os.clock()
 		teammatesList = {}
 		lastTeammatesList = {}
 	end
 
-	if true then -- show quests
+	if showQuests then -- show quests
 		camera:showQuestsForPlayerById(player.playerId, true)
 	end
 
@@ -832,7 +834,9 @@ end
 function clearTargetPlayer()
 	if targetPlayer then
 		Settings.mutePlayerByName(targetPlayer.playerName, false)
-		camera:showQuestsForPlayerById(targetPlayer.playerId, false)
+		if showQuests then
+			camera:showQuestsForPlayerById(targetPlayer.playerId, false)
+		end
 		isSelfMuted = not muteSelf
 
 		targetPlayerName = ""
@@ -2712,7 +2716,7 @@ function onExit()
 	camera.hideNearestHead = false
 	camera.nearClippingPlane = 0.001
 
-	if targetPlayer and true then -- show quests
+	if targetPlayer and showQuests then -- show quests
 		camera:showQuestsForPlayerById(targetPlayer.playerId, false)
 	end
 
