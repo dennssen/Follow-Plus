@@ -1458,20 +1458,12 @@ function onGui()
 					setTargetPlayer(player)
 				end
 
-				if targetPlayer then
-					if
-						targetPlayer.playerName ~= targetPlayerName
-						and not string.find(string.lower(player.playerName), string.lower(targetPlayerName))
-					then
-						continue
-					end
-				else
-					if
-						not string.find(string.lower(player.playerName), string.lower(targetPlayerName))
-						and targetPlayerName ~= "YourName"
-					then
-						continue
-					end
+				if
+					(targetPlayer and targetPlayerName ~= targetPlayer.playerName)
+					and targetPlayerName ~= "YourName"
+					and not string.find(string.lower(player.playerName), string.lower(targetPlayerName))
+				then
+					continue
 				end
 
 				if
