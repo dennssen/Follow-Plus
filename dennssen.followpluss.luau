@@ -1488,6 +1488,10 @@ function onGui()
 
 		Gui.unindent()
 	end
+	local currentTime = os.clock()
+	if math.round(((currentTime - arenaLoadTime) / getArenaDelay) * 100) < 100 then
+		Gui.text(`Loading Arenas... ({math.round(((currentTime - arenaLoadTime) / getArenaDelay) * 100)}%)`)
+	end
 
 	cameraFOV = Gui.sliderInt(cameraFOVLabel, cameraFOV, 40, 179)
 	if not Gui.isItemActive() then
