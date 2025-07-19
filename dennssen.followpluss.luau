@@ -1,3 +1,5 @@
+--!strict
+
 -- Only used for display reasons
 local _version: string = "1.8.5"
 metadata = {
@@ -37,7 +39,8 @@ end
 
 --(A2.Vector){ 0.000000, 0.000000, -180.000000 }
 function stringToVec3(string: string): Vec3
-	local x, y, z = string.match(string, "%{ ([%d.-]+), ([%d.-]+), ([%d.-]+) %}")
+	local x: string? | number, y: string? | number, z: string? | number =
+		string.match(string, "%{ ([%d.-]+), ([%d.-]+), ([%d.-]+) %}")
 	if not x or not y or not z then
 		return Vec3.zeroVector
 	end
@@ -46,7 +49,7 @@ function stringToVec3(string: string): Vec3
 	y = tonumber(y)
 	z = tonumber(z)
 
-	local vec = Vec3.new(x, y, z)
+	local vec = Vec3.new(x :: number, y :: number, z :: number)
 	return vec
 end
 
@@ -57,10 +60,10 @@ function muteAll(mute: boolean)
 	end
 end
 
-function muteList(mute: boolean, playerNames: { string })
-	for _, playerName in playerNames do
-		if not Settings.mutePlayerByName(playerName, mute) then
-			print(playerName)
+function muteList(mute: boolean, players: { ReplayPlayer })
+	for _, player: ReplayPlayer in players do
+		if not Settings.mutePlayerByName(player.playerName, mute) then
+			print(player.playerName)
 		end
 	end
 end
@@ -274,6 +277,8 @@ type BoxType = {
 	render: (self: BoxType, r: number, g: number, b: number) -> (),
 	checkPointIntersect: (self: BoxType, point: Vec3) -> boolean,
 	getClosestPoint: (self: BoxType, point: Vec3, surfaceOnly: boolean) -> Vec3,
+
+	empty: BoxType,
 }
 
 local Box: BoxType = {} :: BoxType
@@ -289,19 +294,19 @@ function Box.new(inputPosition: Vec3, inputSize: Vec3, inputRotation: Quat): Box
 	self.vertexLocations = {}
 	self.locals = {
 		x = {
-			position = nil,
-			normal = nil,
-			length = nil,
+			position = Vec3.zeroVector,
+			normal = Vec3.zeroVector,
+			length = 0,
 		},
 		y = {
-			position = nil,
-			normal = nil,
-			length = nil,
+			position = Vec3.zeroVector,
+			normal = Vec3.zeroVector,
+			length = 0,
 		},
 		z = {
-			position = nil,
-			normal = nil,
-			length = nil,
+			position = Vec3.zeroVector,
+			normal = Vec3.zeroVector,
+			length = 0,
 		},
 	}
 	self:generatePoints()
@@ -358,7 +363,7 @@ function Box:generatePoints(): ()
 	self.locals.y.position = self.vertexLocations[3] - self.vertexLocations[1]
 	self.locals.z.position = self.vertexLocations[2] - self.vertexLocations[1]
 
-	for _, l in self.locals do
+	for _, l: Local in self.locals :: { Local } do
 		l.normal = l.position:getSafeNormal()
 		l.length = l.position:length()
 	end
@@ -390,7 +395,7 @@ function Box:render(r: number, g: number, b: number): ()
 	WorldDraw.drawLine(self.position, self.position + self.rotation:getRightVector() * 100, 0, 0, 1, 10, 0)
 end
 
-function Box:checkPointIntersect(point: Vec3): boolean
+function Box:checkPointIntersect(point: Vec3?): boolean
 	if point == nil then
 		return false
 	end
@@ -454,6 +459,8 @@ function Box:getClosestPoint(point: Vec3, surfaceOnly: boolean): Vec3
 	return worldClosest
 end
 
+Box.empty = Box.new(Vec3.zeroVector, Vec3.zeroVector, Quat.identity)
+
 type ArenaTeam = {
 	goal: {
 		position: Vec3,
@@ -505,26 +512,26 @@ function Arena.new(gamemode: ModuleStateSpectatorLuaApi): Arena
 
 	self.home = {
 		goal = {
-			position = nil,
-			rotation = nil,
-			box = nil,
+			position = Vec3.zeroVector,
+			rotation = Quat.identity,
+			box = Box.empty,
 		},
 		goalCam = {
-			position = nil,
-			rotation = nil,
+			position = Vec3.zeroVector,
+			rotation = Quat.identity,
 		},
 		players = {},
 	}
 
 	self.away = {
 		goal = {
-			position = nil,
-			rotation = nil,
-			box = nil,
+			position = Vec3.zeroVector,
+			rotation = Quat.identity,
+			box = Box.empty,
 		},
 		goalCam = {
-			position = nil,
-			rotation = nil,
+			position = Vec3.zeroVector,
+			rotation = Quat.identity,
 		},
 		players = {},
 	}
@@ -571,7 +578,7 @@ function Arena:setTeams()
 	self.players = allPlayers
 end
 
-local Arena3v3 = {} :: Arena & {
+type Arena3v3 = Arena & {
 	homeRotationOffset: Quat,
 	awayRotationOffset: Quat,
 	boxSize: Vec3,
@@ -588,6 +595,8 @@ local Arena3v3 = {} :: Arena & {
 	enterGoalCamDist: number,
 	exitGoalCamDist: number,
 }
+
+local Arena3v3 = {} :: Arena3v3
 Arena3v3.__index = Arena3v3
 setmetatable(Arena3v3, { __index = Arena })
 
@@ -608,11 +617,11 @@ Arena3v3.enterGoalCamDist = 500
 Arena3v3.exitGoalCamDist = 750
 
 function Arena3v3.new(gamemode: ModuleStateSpectatorLuaApi): Arena
-	local self = setmetatable(Arena.new(gamemode), Arena3v3)
+	local self = setmetatable(Arena.new(gamemode), Arena3v3) :: any
 	self.type = "3v3"
 	self.name = self.slotId:gsub("TKB_", "")
 	self:setupDimensions()
-	return self
+	return self :: Arena3v3
 end
 
 function Arena3v3:isPointOnHomeSide(point: Vec3): boolean
@@ -636,7 +645,7 @@ function Arena3v3:setupDimensions()
 		position = self.transform.position
 			+ (self.transform.rotation * Arena3v3.homeRotationOffset):rotateVector(Arena3v3.goalPositionOffset),
 		rotation = self.transform.rotation * Arena3v3.homeRotationOffset:inverse(),
-		box = nil,
+		box = Box.empty,
 	}
 
 	self.home.goal.box = Box.new(self.home.goal.position, Arena3v3.goalBoxSize, self.home.goal.rotation)
@@ -651,7 +660,7 @@ function Arena3v3:setupDimensions()
 		position = self.transform.position
 			+ (self.transform.rotation * Arena3v3.awayRotationOffset):rotateVector(Arena3v3.goalPositionOffset),
 		rotation = self.transform.rotation * Arena3v3.awayRotationOffset:inverse(),
-		box = nil,
+		box = Box.empty,
 	}
 	self.away.goal.box = Box.new(self.away.goal.position, Arena3v3.goalBoxSize, self.away.goal.rotation)
 
@@ -788,7 +797,7 @@ function Arena3v3:GUIChangeDimensions()
 	self:setupDimensions()
 end
 
-local Arena4v4 = {} :: Arena & {
+type Arena4v4 = Arena & {
 	homeRotationOffset: Quat,
 	awayRotationOffset: Quat,
 	boxSize: Vec3,
@@ -797,6 +806,8 @@ local Arena4v4 = {} :: Arena & {
 	goalBoxSize: Vec3,
 	goalPositionOffset: Vec3,
 }
+
+local Arena4v4 = {} :: Arena4v4
 Arena4v4.__index = Arena4v4
 setmetatable(Arena4v4, { __index = Arena })
 
@@ -809,11 +820,11 @@ Arena4v4.goalBoxSize = Vec3.new(200, 450, 225)
 Arena4v4.goalPositionOffset = Vec3.new(4075, 0, 175)
 
 function Arena4v4.new(gamemode: ModuleStateSpectatorLuaApi): Arena
-	local self = setmetatable(Arena.new(gamemode), Arena4v4)
+	local self = setmetatable(Arena.new(gamemode), Arena4v4) :: any
 	self.type = "4v4"
 	self.name = `Jakeball {self.slotId:sub(self.slotId:len() - 2)}`
 	self:setupDimensions()
-	return self
+	return self :: Arena4v4
 end
 
 function Arena4v4:isPointOnHomeSide(point: Vec3): boolean
@@ -837,7 +848,7 @@ function Arena4v4:setupDimensions()
 		position = self.transform.position
 			+ (self.transform.rotation * Arena4v4.homeRotationOffset):rotateVector(Arena4v4.goalPositionOffset),
 		rotation = self.transform.rotation * Arena4v4.homeRotationOffset:inverse(),
-		box = nil,
+		box = Box.empty,
 	}
 
 	self.home.goal.box = Box.new(self.home.goal.position, Arena4v4.goalBoxSize, self.home.goal.rotation)
@@ -846,7 +857,7 @@ function Arena4v4:setupDimensions()
 		position = self.transform.position
 			+ (self.transform.rotation * Arena4v4.awayRotationOffset):rotateVector(Arena4v4.goalPositionOffset),
 		rotation = self.transform.rotation * Arena4v4.awayRotationOffset:inverse(),
-		box = nil,
+		box = Box.empty,
 	}
 	self.away.goal.box = Box.new(self.away.goal.position, Arena4v4.goalBoxSize, self.away.goal.rotation)
 end
@@ -862,7 +873,7 @@ function Arena4v4:getTeamRotation(teamIndex: number): Quat
 	return rotation
 end
 
-function Arena4v4:checkGoalCam(goalPosition: Vec3, goalRotation: Quat): boolean
+function Arena4v4:checkGoalCam(player: ReplayPlayer): boolean
 	return false
 end
 
@@ -886,7 +897,7 @@ function Arena4v4:GUIChangeDimensions()
 	self:setupDimensions()
 end
 
-local Driftblitz = {} :: Arena & {
+type Driftblitz = Arena & {
 	homeRotationOffset: Quat,
 	awayRotationOffset: Quat,
 	boxSize: Vec3,
@@ -895,6 +906,8 @@ local Driftblitz = {} :: Arena & {
 	goalBoxSize: Vec3,
 	goalPositionOffset: Vec3,
 }
+
+local Driftblitz = {} :: Driftblitz
 Driftblitz.__index = Driftblitz
 setmetatable(Driftblitz, { __index = Arena })
 
@@ -907,11 +920,11 @@ Driftblitz.goalBoxSize = Vec3.new(100, 890, 300)
 Driftblitz.goalPositionOffset = Vec3.new(5295, 0, 175)
 
 function Driftblitz.new(gamemode: ModuleStateSpectatorLuaApi): Arena
-	local self = setmetatable(Arena.new(gamemode), Driftblitz)
+	local self = setmetatable(Arena.new(gamemode), Driftblitz) :: any
 	self.name = self.slotId
 	self.type = "driftblitz"
 	self:setupDimensions()
-	return self
+	return self :: Driftblitz
 end
 
 function Driftblitz:isPointOnHomeSide(point: Vec3): boolean
@@ -935,7 +948,7 @@ function Driftblitz:setupDimensions()
 		position = self.transform.position
 			+ (self.transform.rotation * Driftblitz.homeRotationOffset):rotateVector(Driftblitz.goalPositionOffset),
 		rotation = self.transform.rotation * Driftblitz.homeRotationOffset:inverse(),
-		box = nil,
+		box = Box.empty,
 	}
 
 	self.home.goal.box = Box.new(self.home.goal.position, Driftblitz.goalBoxSize, self.home.goal.rotation)
@@ -944,7 +957,7 @@ function Driftblitz:setupDimensions()
 		position = self.transform.position
 			+ (self.transform.rotation * Driftblitz.awayRotationOffset):rotateVector(Driftblitz.goalPositionOffset),
 		rotation = self.transform.rotation * Driftblitz.awayRotationOffset:inverse(),
-		box = nil,
+		box = Box.empty,
 	}
 	self.away.goal.box = Box.new(self.away.goal.position, Driftblitz.goalBoxSize, self.away.goal.rotation)
 end
@@ -960,7 +973,7 @@ function Driftblitz:getTeamRotation(teamIndex: number): Quat
 	return rotation
 end
 
-function Driftblitz:checkGoalCam(goalPosition: Vec3, goalRotation: Quat): boolean
+function Driftblitz:checkGoalCam(player: ReplayPlayer): boolean
 	return false
 end
 
@@ -1107,8 +1120,8 @@ local playerSwitchTime: number = 0
 local muteDelay: number = 1
 
 local lastServerPlayerList: { number } = {}
-local lastTeammatesList: { string } = {}
-local teammatesList: { string } = {}
+local lastTeammatesList: { ReplayPlayer } = {}
+local teammatesList: { ReplayPlayer } = {}
 
 -- grabbing
 local gestureControls: boolean = profile.gestureControls
@@ -2180,7 +2193,7 @@ function updateBallData(ball: ReplayBall, seconds: number)
 end
 
 function teamLists(frame: ReplayFrame)
-	local tempTeamList: { string } = {}
+	local tempTeamList: { ReplayPlayer } = {}
 	if teamIndex == TeamIndex.NoTeam then
 		lastTeammatesList = teammatesList
 		teammatesList = {}
@@ -2197,7 +2210,7 @@ function teamLists(frame: ReplayFrame)
 			continue
 		end
 
-		table.insert(tempTeamList, player.playerName)
+		table.insert(tempTeamList, player)
 	end
 
 	lastTeammatesList = teammatesList
@@ -2415,7 +2428,7 @@ function grabbingCamera(player: ReplayPlayer, grabHand: Transform)
 	end
 end
 
-function calculateAcceleration(currentVelocity, dt)
+function calculateAcceleration(currentVelocity: Vec3, dt: number)
 	local dragForce = currentVelocity * -drag
 	local dragLoss = dragForce / 0.21
 	local gravityAcceleration = Vec3.new(0, 0, GravityScale)
@@ -2453,7 +2466,7 @@ function calculateBounce(velocity: Vec3, surfaceNormal: Vec3)
 	return reflectedVelocity
 end
 
-function applyRollingFriction(velocity)
+function applyRollingFriction(velocity: Vec3)
 	if velocity.z == 0 then
 		-- Apply friction to the horizontal components (x and y)
 		velocity.x = velocity.x * rollingFriction
@@ -2737,7 +2750,7 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 		playerBox:render(0.7, 0.15, 0.15)
 	end
 
-	if offsetPosition ~= nil then
+	if offsetPosition then
 		offsetPosition = registeredOffsetHit(position, offsetPosition)
 		position += offsetPosition
 	end
@@ -2966,7 +2979,7 @@ function configureVOIP()
 		print("focused arena off")
 		if muteSelf then
 			local toMuteList = frame.players
-			table.remove(toMuteList, table.find(toMuteList, targetPlayer.playerName))
+			table.remove(toMuteList, table.find(toMuteList, targetPlayer))
 			muteList(false, toMuteList)
 		else
 			muteAll(false)
@@ -2982,14 +2995,14 @@ function configureVOIP()
 	if focusedArena and (#lastTeammatesList == 0 and #teammatesList > 0) then
 		-- entered arena
 		print("entered arena")
-		local toMuteList: { string } = frame.players
-		for _, playerName in teammatesList do
-			table.remove(toMuteList, table.find(toMuteList, playerName))
+		local toMuteList: { ReplayPlayer } = frame.players
+		for _, player: ReplayPlayer in teammatesList do
+			table.remove(toMuteList, table.find(toMuteList, player))
 		end
 
 		if muteSelf then
-			table.remove(teammatesList, table.find(teammatesList, targetPlayer.playerName))
-			table.insert(toMuteList, targetPlayer.playerName)
+			table.remove(teammatesList, table.find(teammatesList, targetPlayer))
+			table.insert(toMuteList, targetPlayer)
 		end
 
 		muteList(true, toMuteList)
@@ -3001,7 +3014,7 @@ function configureVOIP()
 		print("left arena")
 		if muteSelf then
 			local toMuteList = frame.players
-			table.remove(toMuteList, table.find(toMuteList, targetPlayer.playerName))
+			table.remove(toMuteList, table.find(toMuteList, targetPlayer))
 			muteList(false, toMuteList)
 		else
 			muteAll(false)
@@ -3028,23 +3041,23 @@ function configureVOIP()
 		end
 	end
 
-	for _, teammateName in teammatesList do
-		local tryFindTeammate = table.find(lastTeammatesList, teammateName)
+	for _, teammate in teammatesList do
+		local tryFindTeammate = table.find(lastTeammatesList, teammate)
 
 		if focusedArena and tryFindTeammate == nil then
 			-- new player joined arena
 			print(`arena join`)
-			Settings.mutePlayerByName(teammateName, false)
+			Settings.mutePlayerByName(teammate.playerName, false)
 		end
 	end
 
-	for _, teammateName in lastTeammatesList do
-		local tryFindLastTeammate = table.find(teammatesList, teammateName)
+	for _, teammate in lastTeammatesList do
+		local tryFindLastTeammate = table.find(teammatesList, teammate)
 
 		if focusedArena and tryFindLastTeammate == nil then
 			-- player left the arena
 			print(`arena leave`)
-			Settings.mutePlayerByName(teammateName, true)
+			Settings.mutePlayerByName(teammate.playerName, true)
 		end
 	end
 
@@ -3163,7 +3176,7 @@ function onMessageReceived(messageTable: MessageValues)
 	end
 	-- callback is a function that takes this cameras GUI as a parameter to receive for the messenger. This is usefull for displaying the same GUI in multiple cameras.
 	if messageTable.callback ~= nil then
-		messageTable.callback(onGui())
+		messageTable.callback(onGui)
 	end
 	-- readLocation is a number representing where to retrive data from, anything above 0 is a replay file. Trying to access a replay file that doesn't exist does nothing.
 	if messageTable.readLocation then
