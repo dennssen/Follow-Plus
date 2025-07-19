@@ -1069,6 +1069,7 @@ local deletingProfile = false
 local newProfileName = ""
 local confirmationText = ""
 local debugBallPrediction = false
+local lastDebugBallPredicion = false
 local playerNameInfo: string = ""
 local playerIdInfo: string = ""
 
@@ -2534,9 +2535,10 @@ end
 function predictBall()
 	local dt = 0.1
 
-	if debugBallPrediction and true then
+	if debugBallPrediction or lastDebugBallPredicion then
 		WorldDraw.clear()
 	end
+	lastDebugBallPredicion = debugBallPrediction
 
 	nowPosition = ballPosition
 	nowVelocity = ballVelocity
@@ -2552,7 +2554,7 @@ function predictBall()
 
 	calculatePrediction(dt)
 
-	if debugBallPrediction and true then
+	if debugBallPrediction then
 		--WorldDraw.drawPoint(nextPosition, 1, 0, 0, 50, 0)
 		WorldDraw.drawLine(ballPosition, nextPosition, 1, 0, 0, 10, 0)
 	end
