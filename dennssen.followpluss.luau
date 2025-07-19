@@ -2868,7 +2868,7 @@ function withPlayer(player: ReplayPlayer)
 		end
 	end
 
-	if autoGoalCam and not ballTarget and arena.type == "3v3" then
+	if autoGoalCam and not (ballTarget and wasInGoal) then
 		if arena:checkGoalCam(player) then
 			return
 		end
