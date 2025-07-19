@@ -1,7 +1,6 @@
 --!strict
 
--- Only used for display reasons
-local _version: string = "1.8.5"
+local _version: string = "1.9.0"
 metadata = {
 	name = "Follow Pluss",
 	description = "A highly customisable multitool for all your following needs, including but not limited to: 5 different Camera Modes, 2 Auto Cameras, Replay Compatability, and More!",
@@ -25,7 +24,6 @@ local TeamIndex = {
 	AwayTeam = 1,
 }
 
--- This is what chatGPT was made for
 local function parseBallJSON(str)
 	-- Table to store the parsed data
 	local result = {}
