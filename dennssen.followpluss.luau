@@ -862,6 +862,10 @@ function Arena4v4:getTeamRotation(teamIndex: number): Quat
 	return rotation
 end
 
+function Arena4v4:checkGoalCam(goalPosition: Vec3, goalRotation: Quat): boolean
+	return false
+end
+
 function Arena4v4:GUIChangeDimensions()
 	Arena4v4.boxSize = Gui.dragFloat3("Arena4v4 Arena Size", Arena4v4.boxSize, 1, -math.huge, math.huge)
 	Arena4v4.boxOffset = Gui.dragFloat3("Arena4v4 Position Offset", Arena4v4.boxOffset, 1, -math.huge, math.huge)
@@ -954,6 +958,10 @@ function Driftblitz:getTeamRotation(teamIndex: number): Quat
 	end
 
 	return rotation
+end
+
+function Driftblitz:checkGoalCam(goalPosition: Vec3, goalRotation: Quat): boolean
+	return false
 end
 
 function Driftblitz:GUIChangeDimensions()
