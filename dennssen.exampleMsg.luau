@@ -16,6 +16,7 @@ type MessageValues = {
 	targetPlayer: ReplayPlayer?,
 	targetPlayerName: string?,
 	positionSmoothing: number?,
+	rotationSmoothing: number?,
 	cameraFOV: number?,
 	cameraMode: number?,
 	radius: number?,
@@ -87,6 +88,7 @@ local defaultValues: MessageValues = {
 	targetPlayer = getReplayFrameFromIndex(5):getPlayerByName("Griid"), -- If Griid is found by this camera then follow pluss will switch to Griid as the targetPlayer (make sure this camera and follow pluss shares the same read location by using something like getReplayFrameFromIndex())
 	targetPlayerName = "Griid", -- If Griid is found by follow pluss then it will switch to Griid as the targetPlayer
 	positionSmoothing = 0.1, -- sets the cameras position smoothing to 0.1
+	rotationSmoothing = 0.2, -- sets the cameras rotation smoothing to 0.2
 	cameraFOV = 90, -- sets the cameras FOV to 90.
 	cameraMode = CameraMode.FirstPerson, -- sets the camera mode to First Person. this is one of the examples where the enum table comes in handy, instead of writing 1, CameraMode.FirstPerson makes more sense to read and does the same thing.
 	radius = 40, -- sets the radius to 40. Doesn't affect First Person

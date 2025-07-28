@@ -3135,6 +3135,7 @@ type MessageValues = {
 	targetPlayer: ReplayPlayer?,
 	targetPlayerName: string?,
 	positionSmoothing: number?,
+	rotationSmoothing: number?,
 	cameraFOV: number?,
 	cameraMode: number?,
 	radius: number?,
@@ -3207,6 +3208,12 @@ function onMessageReceived(messageTable: MessageValues)
 	-- positionSmoothing is a number that sets the cameras positions smoothing, the number can be set between 0.000 and 1.000
 	if messageTable.positionSmoothing then
 		positionSmoothing = messageTable.positionSmoothing
+		camera.positionSmoothing = positionSmoothing
+	end
+	-- positionSmoothing is a number that sets the cameras rotation smoothing, the number can be set between 0.000 and 1.000
+	if messageTable.rotationSmoothing then
+		rotationSmoothing = messageTable.rotationSmoothing
+		camera.rotationSmoothing = rotationSmoothing
 	end
 	-- cameraMode is a number that sets the cameras follow mode. There are currently 4 modes, and the first one starts at 1.
 	if messageTable.cameraMode then
