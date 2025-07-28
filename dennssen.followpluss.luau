@@ -24,6 +24,12 @@ local TeamIndex = {
 	AwayTeam = 1,
 }
 
+function debugPrint(s: any)
+	if Input.getKeyDown(Input.Key.N) then
+		print(s)
+	end
+end
+
 local function parseBallJSON(str)
 	-- Table to store the parsed data
 	local result = {}
