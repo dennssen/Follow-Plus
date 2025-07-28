@@ -1359,6 +1359,7 @@ function setArena(_arena: Arena)
 end
 
 function onGui()
+	Gui.text("Version: " .. _version)
 	local readLocationString = ""
 	if readLocation > 0 then
 		readLocationString = "Replay " .. readLocation
@@ -1951,7 +1952,6 @@ Be able to grab the camera and throw it to change modes
 			Gui.text("Ball Distance: " .. tostring(getDist(headPosition, ballPosition)))
 			Gui.treePop()
 		end
-		Gui.text("Version: " .. _version)
 
 		Gui.newLine()
 		Gui.unindent()
