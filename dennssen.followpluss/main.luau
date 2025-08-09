@@ -2642,6 +2642,7 @@ function tick(dt)
 	end
 
 	updatePlayerData(targetPlayer, frame)
+	arena:tick()
 
 	local ball = nil
 	if targetPlayer.teamIndex == Util.TeamIndex.NoTeam then
