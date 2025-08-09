@@ -199,4 +199,45 @@ function Util.multispacing(amount: number)
 	end
 end
 
+function Util.getKey(value, table): string
+	local key = ""
+	for k, v in pairs(table) do
+		if v == value then
+			key = k
+		end
+	end
+	return key
+end
+
+-- clamps every axis in the vector to be between max and min
+function Util.vec3Clamp(vec: Vec3, min: number, max: number): Vec3
+	local axises = { x = vec.x, y = vec.y, z = vec.z }
+
+	for axis, value in pairs(axises) do
+		if value < min then
+			axises[axis] = min
+		elseif value > max then
+			axises[axis] = max
+		end
+	end
+
+	vec.x = axises.x
+	vec.y = axises.y
+	vec.z = axises.z
+
+	return vec
+end
+
+function Util.vec3ClampLength(vec: Vec3, maxLength: number): Vec3
+	if vec:length() > maxLength then
+		vec = vec:normalize() * maxLength
+	end
+
+	return vec
+end
+
+function Util.quatFromVec3(vec: Vec3): Quat
+	return Quat.fromEuler(vec.x, vec.y, vec.z)
+end
+
 return Util
