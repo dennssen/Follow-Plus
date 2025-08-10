@@ -19,6 +19,7 @@ export type ArenaTeam<T = {}> = {
 		box: BoxType,
 	},
 	players: { ReplayPlayer },
+	sizeChange: boolean,
 	data: T,
 }
 
@@ -37,6 +38,7 @@ export type Arena<ArenaData = {}, HomeData = {}, AwayData = {}> = {
 	home: ArenaTeam<HomeData>,
 	away: ArenaTeam<AwayData>,
 	players: { ReplayPlayer },
+	playerSizeChange: boolean,
 	ball: ReplayBall,
 	data: ArenaData,
 
@@ -113,6 +115,7 @@ function Arena.new(gamemode: ModuleStateSpectatorLuaApi, frameIndex: number): Ar
 			box = Box.empty,
 		},
 		players = {},
+		sizeChange = false,
 		data = {},
 	}
 
@@ -130,9 +133,11 @@ function Arena.new(gamemode: ModuleStateSpectatorLuaApi, frameIndex: number): Ar
 			box = Box.empty,
 		},
 		players = {},
+		sizeChange = false,
 		data = {},
 	}
 
+	self.playerSizeChange = false
 	self.instantUpdate = false
 	self.gracePeriodStartTime = 0
 	self.isOvertime = false
@@ -387,6 +392,13 @@ function Arena:setTeams()
 			table.insert(tempAway, player)
 		end
 	end
+
+	local homePlayersAmount = #self.home.players
+	local awayPlayersAmount = #self.away.players
+
+	self.home.sizeChange = homePlayersAmount ~= #tempHome
+	self.away.sizeChange = awayPlayersAmount ~= #tempAway
+	self.playerSizeChange = self.home.sizeChange or self.away.sizeChange
 
 	self.home.players = tempHome
 	self.away.players = tempAway
