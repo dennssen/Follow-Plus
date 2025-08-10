@@ -147,6 +147,10 @@ function Util.isBetweenVector(n: Vec3, min: Vec3, max: Vec3, up: Vec3): boolean
 	return nHeight >= minHeight and nHeight <= maxHeight
 end
 
+function Util.isBetweenVec2(v1: Vec2, v2: Vec2, point: Vec2)
+	return v1.x < point.x and v2.x > point.x and v1.y < point.y and v2.y > point.y
+end
+
 function Util.isBetween(n: number, min: number, max: number): boolean
 	if n > min and n < max then
 		return true
@@ -238,6 +242,23 @@ end
 
 function Util.quatFromVec3(vec: Vec3): Quat
 	return Quat.fromEuler(vec.x, vec.y, vec.z)
+end
+
+function Util.dateTimeDeltaSeconds(past: DateTime, future: DateTime): number
+	local ticksPast = (past.ticks / 10000000) - 62167219200
+	local ticksFuture = (future.ticks / 10000000) - 62167219200
+
+	return os.difftime(ticksFuture, ticksPast)
+end
+
+function Util.lerp(a: number, b: number, t: number): number
+	if a == nil then
+		return b
+	end
+	if b == nil then
+		return a
+	end
+	return a * (1.0 - t) + b * t
 end
 
 return Util
