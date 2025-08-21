@@ -10,6 +10,10 @@ local _version: string = "1.9.0"
 -- dependecies
 local Util = require("util")
 
+local Emotes = require("emotes")
+type Emote = Emotes.Emote
+type Emotes = Emotes.Emotes
+
 local Box = require("box")
 type BoxType = typeof(Box)
 
@@ -838,6 +842,7 @@ local yMouse = Input.Key.MouseY
 
 -- Debug
 local debugFaceTheBall: boolean = false
+local followFreecam: boolean = false
 
 function updateVariables(profileName)
 	isSelfMuted = false
@@ -995,6 +1000,8 @@ function onGui()
 		Gui.endCombo()
 	end
 	Gui.setItemTooltip("The currently selected profile")
+
+	Emotes:selectEmoteGUI("Emote")
 
 	Gui.newLine()
 
@@ -1496,6 +1503,18 @@ Be able to grab the camera and throw it to change modes
 		Gui.newLine()
 
 		debugFaceTheBall = Gui.checkbox("Debug Face The Ball", debugFaceTheBall)
+
+		Gui.newLine()
+
+		if followFreecam and Gui.button("stop follow freecam") then
+			followFreecam = false
+			camera:followCamera(nil)
+		end
+		if not followFreecam and Gui.button("follow freecam") then
+			followFreecam = true
+			camera:followCamera(getCameraById("anotheraxiom.freecam"))
+		end
+
 		Gui.unindent()
 		Gui.indent()
 		Gui.separatorText("Info")
@@ -2624,6 +2643,8 @@ function tick(dt)
 
 	deltaTime = dt
 	frame = Util.getReplayFrameFromIndex(readLocation)
+
+	Emotes:tick()
 
 	if cachedGamemodeAmount ~= #SpectatorGamemodes.listGamemodeIds() then
 		arenas = getArenas()
