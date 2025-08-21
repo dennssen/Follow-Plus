@@ -213,6 +213,13 @@ function Util.getKey(value, table): string
 	return key
 end
 
+function Util.negateVec3(vec: Vec3): Vec3 -- annoying error workaround
+	vec.x = -vec.x
+	vec.y = -vec.y
+	vec.z = -vec.z
+	return vec
+end
+
 -- clamps every axis in the vector to be between max and min
 function Util.vec3Clamp(vec: Vec3, min: number, max: number): Vec3
 	local axises = { x = vec.x, y = vec.y, z = vec.z }
@@ -259,6 +266,16 @@ function Util.lerp(a: number, b: number, t: number): number
 		return a
 	end
 	return a * (1.0 - t) + b * t
+end
+
+function Util.clampAround(n: number, min: number, max: number): number
+	if n < min then
+		return max
+	elseif n > max then
+		return min
+	else
+		return n
+	end
 end
 
 return Util
