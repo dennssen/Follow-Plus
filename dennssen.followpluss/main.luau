@@ -2,6 +2,11 @@
 
 local _version: string = "1.9.0"
 
+-- TODO:
+-- Switch to the new ball sim library instead of in house
+-- test new fp with old caster
+-- merge and release
+
 -- dependecies
 local Util = require("util")
 
@@ -58,9 +63,6 @@ function muteList(mute: boolean, players: { ReplayPlayer })
 		end
 	end
 end
-
-local arenaLoadTime: number = 0
-local getArenaDelay: number = 7
 
 local function initializeProfiles()
 	local saveToConfig = false
@@ -204,6 +206,8 @@ local BallGoalMode = {
 	EnemyGoal = 1,
 	BothGoals = 2,
 }
+
+local cachedGamemodeAmount: number = 0
 
 local FollowArena = {} :: FollowArena
 FollowArena.__index = FollowArena
@@ -860,7 +864,7 @@ function updateVariables(profileName)
 end
 
 function main()
-	arenaLoadTime = os.clock()
+	arenas = getArenas()
 end
 
 function onTransitionBegin()
@@ -920,6 +924,7 @@ function setTargetPlayer(player: ReplayPlayer?)
 		camera:showQuestsForPlayerById(player.playerId, true)
 	end
 
+	setArena(getClosestArena(player.root.position))
 	targetPlayer = player
 	targetPlayerName = player.playerName
 end
@@ -1075,10 +1080,6 @@ function onGui()
 		Gui.setItemTooltip("Clear Follow Player")
 
 		Gui.unindent()
-	end
-	local currentTime = os.clock()
-	if math.round(((currentTime - arenaLoadTime) / getArenaDelay) * 100) < 100 then
-		Gui.text(`Loading Arenas... ({math.round(((currentTime - arenaLoadTime) / getArenaDelay) * 100)}%)`)
 	end
 
 	cameraFOV = Gui.sliderInt(cameraFOVLabel, cameraFOV, 40, 179)
@@ -1523,7 +1524,7 @@ Be able to grab the camera and throw it to change modes
 			Gui.text("Ball Arena: " .. tostring(ballArena))
 			Gui.treePop()
 		end
-		if Gui.treeNode("Arena") then
+		if arena and Gui.treeNode("Arena") then
 			Gui.text("Arena Name: " .. arena.name)
 			Gui.text("Arena Position: " .. tostring(arena.transform.position))
 			Gui.text("Arena Rotation: " .. tostring(arena.transform.rotation:euler()))
@@ -2624,19 +2625,20 @@ function tick(dt)
 	deltaTime = dt
 	frame = Util.getReplayFrameFromIndex(readLocation)
 
+	if cachedGamemodeAmount ~= #SpectatorGamemodes.listGamemodeIds() then
+		arenas = getArenas()
+		if Util.getDictSize(arenas) > 0 then
+			setArena(Util.getDictIndex(arenas, 1))
+		end
+		cachedGamemodeAmount = #SpectatorGamemodes.listGamemodeIds()
+	end
+
 	if #frame.players == 0 or not targetPlayer then
 		noPlayerOrbit(dt)
 		return
 	end
 
 	if arena == nil then
-		local currentTime = os.clock()
-		if currentTime >= arenaLoadTime + getArenaDelay then
-			arenas = getArenas()
-			if Util.getDictSize(arenas) > 0 then
-				setArena(Util.getDictIndex(arenas, 1))
-			end
-		end
 		noPlayerOrbit(dt)
 		return
 	end
