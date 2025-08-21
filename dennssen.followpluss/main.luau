@@ -891,7 +891,7 @@ function onTransitionBegin()
 		-- transition to orbit
 		local fromEuler = Quat.fromEuler(orbitRotation.x, orbitRotation.y, orbitRotation.z)
 		local direction = fromEuler:getForwardVector()
-		camera.position = orbitCenter + -direction * orbitRadius
+		camera.position = orbitCenter + Util.negateVec3(direction) * orbitRadius
 
 		camera:lookAt(orbitLookAt, Vec3.upVector)
 	end
@@ -1697,7 +1697,7 @@ function rotationPivotPosition(position: Vec3, rotation: Quat, radius: number): 
 	radius *= 10
 	local cameraDirection = rotationQuat:getForwardVector()
 
-	pivotPosition = position + -cameraDirection * radius
+	pivotPosition = position + Util.negateVec3(cameraDirection) * radius
 
 	return pivotPosition
 end
@@ -1708,7 +1708,7 @@ function velocityPivotPosition(position: Vec3, velocity: Vec3, radius: number, b
 
 	local cameraDirection = velocity:getSafeNormal()
 	if not ball then
-		cameraDirection = -cameraDirection
+		cameraDirection = Util.negateVec3(cameraDirection)
 	end
 
 	velocityPivot = position + cameraDirection * radius
@@ -1721,7 +1721,7 @@ function twoPointPivotPosition(point1: Vec3, point2: Vec3, radius: number): Vec3
 	local direction = Util.getForward(point1, point2)
 	direction.z = math.clamp(direction.z, -0.8, 0.8)
 	radius *= 10
-	pivotPosition = point1 + -direction * radius
+	pivotPosition = point1 + Util.negateVec3(direction) * radius
 
 	return pivotPosition
 end
@@ -1738,7 +1738,7 @@ function faceTheBallPivotPosition(position: Vec3, playerBox: BoxType, ballPositi
 		WorldDraw.drawLine(closestPointToBall, closestPointToBall + (direction * 50), 0, 1, 0, 10, 0)
 	end
 
-	faceTheBallPosition = position + -direction * radius
+	faceTheBallPosition = position + Util.negateVec3(direction) * radius
 
 	return faceTheBallPosition
 end
@@ -1894,7 +1894,8 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 			)
 			if throwVelocity ~= Vec3.zeroVector then
 				local forwardLook = throwVelocity:normalize()
-				rightHandTransform.rotation = Quat.fromXZ(-forwardLook, player.head.rotation:getUpVector())
+				rightHandTransform.rotation =
+					Quat.fromXZ(Util.negateVec3(forwardLook), player.head.rotation:getUpVector())
 			else
 				local rightHandRotation: Quat = player.root.rotation * player.rightHand.rotation
 				rightHandTransform.rotation = rightHandRotation
@@ -1957,7 +1958,7 @@ function grabbingCamera(player: ReplayPlayer, grabHand: Transform)
 
 	local playerForward = player.root.rotation:getForwardVector()
 	local playerUp = player.root.rotation:getUpVector()
-	local playerBackwards = -playerForward
+	local playerBackwards = Util.negateVec3(playerForward)
 
 	local forwardDot = playerForward:dot(throwVelocity:normalize())
 	local upDot = playerUp:dot(throwVelocity:normalize())
@@ -2359,7 +2360,7 @@ function checkFlip(rightHandTransform: Transform, rightHandPosebits, leftHandTra
 			rightHandPose.GripDown
 			and rightHandPose.TriggerDown
 			and rightHandVelocity:length() >= 1
-			and otherHandDirection:dot(-handForward) > 0.75
+			and otherHandDirection:dot(Util.negateVec3(handForward)) > 0.75
 			and handDistance <= 30
 		then
 			if rightDot > 0.8 or rightDot < -0.8 then
@@ -2377,7 +2378,7 @@ function checkFlip(rightHandTransform: Transform, rightHandPosebits, leftHandTra
 			leftHandPose.GripDown
 			and leftHandPose.TriggerDown
 			and leftHandVelocity:length() >= 1
-			and otherHandDirection:dot(-handForward) > 0.75
+			and otherHandDirection:dot(Util.negateVec3(handForward)) > 0.75
 			and handDistance <= 30
 		then
 			if leftDot > 0.8 or leftDot < -0.8 then
@@ -2521,7 +2522,7 @@ function noPlayerOrbit(dt: number)
 	local fromEuler = Quat.fromEuler(orbitRotation.x, orbitRotation.y, orbitRotation.z)
 	local direction = fromEuler:getForwardVector()
 
-	camera.position = orbitCenter + -direction * orbitRadius
+	camera.position = orbitCenter + Util.negateVec3(direction) * orbitRadius
 	gravityUpDirection = gravity.upDirection
 
 	camera:lookAtBasic(Vec3.zeroVector)
