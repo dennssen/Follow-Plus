@@ -2,10 +2,6 @@
 
 local _version: string = "1.9.0"
 
--- TODO:
--- test new fp with old caster
--- merge and release
-
 -- dependecies
 local Util = require("util")
 
