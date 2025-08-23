@@ -239,7 +239,7 @@ function Util.vec3Clamp(vec: Vec3, min: number, max: number): Vec3
 	return vec
 end
 
-function Util.vec3ClampLength(vec: Vec3, maxLength: number): Vec3
+function Util.clampMagnitude3(vec: Vec3, maxLength: number): Vec3
 	if vec:length() > maxLength then
 		vec = vec:normalize() * maxLength
 	end

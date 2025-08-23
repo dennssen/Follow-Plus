@@ -1644,7 +1644,7 @@ function registeredOffsetHit(position: Vec3, offset: Vec3): Vec3
 	if hit.successful then
 		local distance = startPosition - hit.position - (Util.getForward(startPosition, endPosition) * -20)
 
-		offset = Util.vec3ClampLength(offset, distance:length())
+		offset = Util.clampMagnitude3(offset, distance:length())
 	end
 
 	return offset
