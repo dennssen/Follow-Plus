@@ -1253,7 +1253,7 @@ Be able to grab the camera and throw it to change modes
 
 		autoBall = Gui.checkbox(generateAsterisk(autoBallLabel, autoBall ~= profile.autoBall), autoBall)
 		Gui.setItemTooltip(
-			"The camera will start Orbiting the Ball for a shot capture when the it detects a possible Shot"
+			"The camera will start prediction where the ball is going to go and follow the ball if it thinks it's going in the goal"
 		)
 
 		if autoBall then
@@ -1281,6 +1281,7 @@ Be able to grab the camera and throw it to change modes
 				6
 			)
 			BallSim.pathLengthSeconds = math.clamp(BallSim.pathLengthSeconds, 0, 6)
+			Gui.setItemTooltip("The amount of seconds into the future the prediction should predict")
 
 			BallSim.resolutionScale = Gui.sliderFloat(
 				generateAsterisk(simResolutionLable, BallSim.resolutionScale ~= profile.simResolutionScale),
@@ -1289,6 +1290,7 @@ Be able to grab the camera and throw it to change modes
 				1
 			)
 			BallSim.resolutionScale = math.clamp(BallSim.resolutionScale, 0.1, 1)
+			Gui.setItemTooltip("The prediction quality. Higher quality SEVERELY impacts performance.")
 		end
 		Gui.unindent()
 	end
