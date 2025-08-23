@@ -1,0 +1,15 @@
+{
+    "name": "dennssen.followpluss",
+    "displayName": "Follow Pluss",
+    "version": "1.9.0",
+    "description": "A highly customisable multitool for all your following needs, including but not limited to: 5 different Camera Modes, 2 Auto Cameras, Replay Compatability, and More!",
+    "main": "main.luau",
+    "keywords": [
+        "pov",
+        "framework",
+        "follow player",
+        "guesture controls"
+    ],
+    "author": "Dennssen",
+    "defaultKeybind": "F"
+}
