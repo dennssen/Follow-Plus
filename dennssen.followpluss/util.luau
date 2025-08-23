@@ -190,6 +190,29 @@ function Util.getClosestBall(targetPosition: Vec3, frameData: ReplayFrame): Repl
 	return clostestBall
 end
 
+function Util.isBallHeld(ball: ReplayBall, ballRadius: number, players: { ReplayPlayer }): boolean
+	local closestPlayerDistance = math.huge
+
+	for _, player in players do
+		local root = player.root
+		local headPosition = player.head.position
+		local leftHandPosition = root.rotation:rotateVector(player.leftHand.position) + root.position
+		local rightHandPosition = root.rotation:rotateVector(player.rightHand.position) + root.position
+
+		local headDistance = Util.getDist(ball.transform.position, headPosition)
+		local leftHandDistance = Util.getDist(ball.transform.position, leftHandPosition)
+		local rightHandDistance = Util.getDist(ball.transform.position, rightHandPosition)
+
+		local minimumDistance = math.min(headDistance, leftHandDistance, rightHandDistance)
+
+		if minimumDistance < closestPlayerDistance then
+			closestPlayerDistance = minimumDistance
+		end
+	end
+
+	return closestPlayerDistance < ballRadius + 10
+end
+
 function Util.debugPrint(s: any)
 	if Input.getKeyDown(Input.Key.N) then
 		print(s)

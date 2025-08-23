@@ -22,10 +22,13 @@ type GoalCamData = {
 }
 
 local Arena = require("arena")
-type FollowArena = Arena.Arena<{}, GoalCamData, GoalCamData> & {
+type Arena<ArenaData, HomeData, AwayData> = Arena.Arena<ArenaData, HomeData, AwayData>
+type FollowArena = Arena<{}, GoalCamData, GoalCamData> & {
 	checkGoalCam: (self: FollowArena, player: ReplayPlayer) -> boolean,
 	goalCam: (self: FollowArena, goalPosition: Vec3, goalRotation: Quat) -> (),
 }
+
+local BallSim = require("ballsim")
 
 local frame: ReplayFrame
 
@@ -74,7 +77,6 @@ local function initializeProfiles()
 		radius = 20,
 		distanceLerp = 4,
 		readLocation = 0,
-		autoBallThreshold = 12,
 		ballGoalMode = 1,
 		cameraPositionOffset = "(A2.Vector){ 0.000000, 0.000000, 0.000000 }",
 		cameraEulerOffset = "(A2.Vector){ 0.000000, 0.000000, 0.000000 }",
@@ -85,6 +87,8 @@ local function initializeProfiles()
 		autoGoalCam = false,
 		goalMode = 1,
 		autoBall = false,
+		simResolutionScale = 0.2,
+		simTimeLength = 4,
 		targetPlayerName = "YourName",
 		cameraMode = CameraMode.HeadRotation,
 		muteSelf = false,
@@ -183,26 +187,14 @@ local ballRotation: Quat = Quat.identity
 local ballVelocity: Vec3 = Vec3.zeroVector
 local ballArena: number = nil
 local autoBall = profile.autoBall
-local autoBallThreshold = profile.autoBallThreshold
-local ballTarget = false
+BallSim.resolutionScale = profile.simResolutionScale
+BallSim.pathLengthSeconds = profile.simTimeLength
 local doneOnceBall = false
 local instaRotateBall = false
-local acceleration: Vec3 = Vec3.zeroVector
-local nowVelocity: Vec3 = Vec3.zeroVector
-local nowPosition: Vec3 = nil
-local nextVelocity: Vec3 = Vec3.zeroVector
-local nextPosition: Vec3 = nil
 
-local wasInGoal: boolean = false
-local timeOutOfGoal = 0
-local maxTimeOutOfGoal = 2
-local timeInGoal = 0
-local maxTimeInGoal = 1
-
-local rollingFriction = 0.98
-local dampingFactor = 0.5
-local GravityScale = -300
-local drag = 0.025
+local isFollowingBall: boolean = false
+local followBallStart: number = 0
+local minBallFollowTime: number = 1.3
 
 local ballGoalMode: number = profile.ballGoalMode
 local ballGoalModes = { "Enemy Goal", "Both Goals" }
@@ -722,8 +714,6 @@ local savingNewProfile = false
 local deletingProfile = false
 local newProfileName = ""
 local confirmationText = ""
-local debugBallPrediction = false
-local lastDebugBallPredicion = false
 local playerNameInfo: string = ""
 local playerIdInfo: string = ""
 
@@ -751,7 +741,8 @@ local forwardGestureModeLabel = "Forward Mode"
 local upGestureModeLabel = "Up Mode"
 local backwardsGestureModeLabel = "Backward Mode"
 local autoBallLabel = "Enabled"
-local autoBallThresholdLabel = "Toggle Speed (m/s)"
+local simResolutionLable = "Prediction Resolution Scale"
+local simTimeLengthLable = "Prediction Length Seconds"
 local ballCamGoalModeLabel = "Ball Goal Mode"
 local autoGoalCamLabel = "Enabled"
 local goalModeLabel = "Mode"
@@ -860,7 +851,6 @@ function updateVariables(profileName)
 	autoGoalCam = profile.autoGoalCam
 	autoBall = profile.autoBall
 	targetPlayerName = profile.targetPlayerName
-	autoBallThreshold = profile.autoBallThreshold
 	ballGoalMode = profile.ballGoalMode
 	cameraEulerOffset = stringToVec3(profile.cameraEulerOffset)
 	cameraPositionOffset = stringToVec3(profile.cameraPositionOffset)
@@ -949,6 +939,8 @@ end
 
 function setArena(_arena: FollowArena)
 	arena = _arena
+	arena.frameIndex = readLocation
+	BallSim.arena = arena :: any
 end
 
 function onGui()
@@ -1283,13 +1275,21 @@ Be able to grab the camera and throw it to change modes
 				"If the ball camera should only activate when being shot on the enemy goal, or if it should activate on both goals"
 			)
 
-			autoBallThreshold = Gui.sliderInt(autoBallThresholdLabel, autoBallThreshold, 10, 15)
-			if not Gui.isItemActive() then
-				autoBallThresholdLabel =
-					generateAsterisk("Toggle Speed (m/s)", autoBallThreshold ~= profile.autoBallThreshold)
-			end
-			autoBallThreshold = math.clamp(autoBallThreshold, 10, 15)
-			Gui.setItemTooltip("The speed of the ball at which the camera switches to a shot capture.")
+			BallSim.pathLengthSeconds = Gui.sliderFloat(
+				generateAsterisk(simTimeLengthLable, BallSim.pathLengthSeconds ~= profile.simTimeLength),
+				BallSim.pathLengthSeconds,
+				0,
+				6
+			)
+			BallSim.pathLengthSeconds = math.clamp(BallSim.pathLengthSeconds, 0, 6)
+
+			BallSim.resolutionScale = Gui.sliderFloat(
+				generateAsterisk(simResolutionLable, BallSim.resolutionScale ~= profile.simResolutionScale),
+				BallSim.resolutionScale,
+				0.1,
+				1
+			)
+			BallSim.resolutionScale = math.clamp(BallSim.resolutionScale, 0.1, 1)
 		end
 		Gui.unindent()
 	end
@@ -1371,7 +1371,8 @@ Be able to grab the camera and throw it to change modes
 					backwardsGestureMode = backwardsGestureMode,
 					readLocation = readLocation,
 					autoBall = autoBall,
-					autoBallThreshold = autoBallThreshold,
+					simResolution = BallSim.resolutionScale,
+					simTimeLength = BallSim.pathLengthSeconds,
 					ballGoalMode = ballGoalMode,
 					cameraEulerOffset = tostring(cameraEulerOffset),
 					cameraPositionOffset = tostring(cameraPositionOffset),
@@ -1440,7 +1441,8 @@ Be able to grab the camera and throw it to change modes
 				backwardsGestureMode = backwardsGestureMode,
 				readLocation = readLocation,
 				autoBall = autoBall,
-				autoBallThreshold = autoBallThreshold,
+				simResolution = BallSim.resolutionScale,
+				simTimeLength = BallSim.pathLengthSeconds,
 				ballGoalMode = ballGoalMode,
 				cameraEulerOffset = tostring(cameraEulerOffset),
 				cameraPositionOffset = tostring(cameraPositionOffset),
@@ -1468,9 +1470,9 @@ Be able to grab the camera and throw it to change modes
 	if Gui.treeNode("Debug") then
 		Gui.indent()
 		Gui.separatorText("Debug Settings")
-		debugBallPrediction = Gui.checkbox("Debug Ball Prediction", debugBallPrediction)
-		GravityScale = Gui.dragInt("Gravity", GravityScale, 1, -1000, 0)
-		drag = Gui.sliderFloat("Drag", drag, 0, 10)
+		BallSim.debug = Gui.checkbox("Debug Ball Prediction", BallSim.debug)
+		BallSim.gravityScale = Gui.sliderFloat("Gravity", BallSim.gravityScale, 0, 1)
+		BallSim.drag = Gui.sliderFloat("Drag", BallSim.drag, 0, 1)
 
 		Gui.newLine()
 
@@ -1767,7 +1769,7 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 		and leftPoseFlags.FullHandPoseOverride ~= HandPose.GrabBall
 	then
 		if
-			(cameraMode == CameraMode.HandHeld and isLeftHanded and not wasInGoal and not cameraInGoal)
+			(cameraMode == CameraMode.HandHeld and isLeftHanded and not isFollowingBall and not cameraInGoal)
 			or player.head.rotation:getForwardVector():dot(Util.getForward(player.head.position, leftHandPosition))
 				< -0.2
 		then
@@ -1829,7 +1831,7 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 		and rightPoseFlags.FullHandPoseOverride ~= HandPose.GrabBall
 	then
 		if
-			(cameraMode == CameraMode.HandHeld and not isLeftHanded and not wasInGoal and not cameraInGoal)
+			(cameraMode == CameraMode.HandHeld and not isLeftHanded and not isFollowingBall and not cameraInGoal)
 			or player.head.rotation:getForwardVector():dot(Util.getForward(player.head.position, rightHandPosition))
 				< -0.2
 		then
@@ -1964,177 +1966,6 @@ function grabbingCamera(player: ReplayPlayer, grabHand: Transform)
 		cameraMode = CameraMode.FaceTheBall
 	elseif biggestDotName == "backwards" then
 		cameraMode = CameraMode.HeadRotation
-	end
-end
-
-function calculateAcceleration(currentVelocity: Vec3, dt: number)
-	local dragForce = currentVelocity * -drag
-	local dragLoss = dragForce / 0.21
-	local gravityAcceleration = Vec3.new(0, 0, GravityScale)
-
-	local acceleration = dragLoss + gravityAcceleration
-	return acceleration
-end
-function NextVelocity(currentVelocity: Vec3, acceleration: Vec3, dt): Vec3
-	local realDrag = drag * dt
-	local calculatedNextVelocity = currentVelocity + acceleration * dt
-	local linDamping = calculatedNextVelocity * -realDrag
-	linDamping.z = 0
-	calculatedNextVelocity += linDamping
-	return calculatedNextVelocity
-end
-
-function NextPosition(position: Vec3, velocity: Vec3, acceleration: Vec3, dt: number)
-	local accelerationTerm = acceleration * (0.5 * (dt * dt))
-	return position + velocity * dt + accelerationTerm
-end
-
--- Function to calculate the velocity after a bounce
-function calculateBounce(velocity: Vec3, surfaceNormal: Vec3)
-	-- Reflect the velocity vector based on the surface normal
-	local dotProduct: number = velocity:dot(surfaceNormal)
-
-	local reflectedVelocity = velocity - (surfaceNormal * (2 * dotProduct))
-
-	if math.abs(reflectedVelocity.z) < 50 then
-		reflectedVelocity.z = 0
-	else
-		reflectedVelocity = reflectedVelocity * dampingFactor
-	end
-
-	return reflectedVelocity
-end
-
-function applyRollingFriction(velocity: Vec3)
-	if velocity.z == 0 then
-		-- Apply friction to the horizontal components (x and y)
-		velocity.x = velocity.x * rollingFriction
-		velocity.y = velocity.y * rollingFriction
-	end
-
-	return velocity
-end
-
-function calculatePrediction(dt: number)
-	acceleration = calculateAcceleration(nowVelocity, dt)
-	nextVelocity = NextVelocity(nowVelocity, acceleration, dt)
-	nextPosition = NextPosition(nowPosition, nextVelocity, acceleration, dt)
-
-	local hit: RayHit = camera:castRay(nowPosition, nextPosition)
-
-	if hit.successful then
-		local ballRadiusOffset = hit.normal * 40
-
-		-- draw normals
-		if debugBallPrediction then
-			WorldDraw.drawLine(
-				hit.position + ballRadiusOffset,
-				hit.position + ballRadiusOffset + (hit.normal * 100),
-				1,
-				0,
-				0,
-				10,
-				0
-			)
-		end
-
-		nextPosition = hit.position + ballRadiusOffset
-
-		nextVelocity = calculateBounce(nextVelocity, hit.normal)
-	end
-end
-
-function isInGoal(): boolean
-	local homeBox: BoxType = arena.home.goal.box
-	local awayBox: BoxType = arena.away.goal.box
-
-	if debugBallPrediction then
-		homeBox:render(1, 0, 0)
-		awayBox:render(0, 0, 1)
-	end
-
-	if homeBox:checkPointIntersect(ballPosition) or awayBox:checkPointIntersect(ballPosition) then
-		return false
-	end
-
-	if homeBox:checkPointIntersect(nowPosition) then
-		if
-			ballGoalMode == BallGoalMode.BothGoals
-			or teamIndex == Util.TeamIndex.AwayTeam and ballGoalMode == BallGoalMode.EnemyGoal
-		then
-			return true
-		end
-	end
-
-	if awayBox:checkPointIntersect(nowPosition) then
-		if
-			ballGoalMode == BallGoalMode.BothGoals
-			or teamIndex == Util.TeamIndex.HomeTeam and ballGoalMode == BallGoalMode.EnemyGoal
-		then
-			return true
-		end
-	end
-
-	return false
-end
-
-function predictBall()
-	local dt = 0.1
-
-	if debugBallPrediction or lastDebugBallPredicion then
-		WorldDraw.clear()
-	end
-	lastDebugBallPredicion = debugBallPrediction
-
-	nowPosition = ballPosition
-	nowVelocity = ballVelocity
-
-	acceleration = calculateAcceleration(nowVelocity, dt)
-
-	local wasInGoalThisLoop = false
-
-	if isInGoal() then
-		wasInGoalThisLoop = true
-		timeOutOfGoal = 0
-	end
-
-	calculatePrediction(dt)
-
-	if debugBallPrediction then
-		--WorldDraw.drawPoint(nextPosition, 1, 0, 0, 50, 0)
-		WorldDraw.drawLine(ballPosition, nextPosition, 1, 0, 0, 10, 0)
-	end
-
-	for i = 1, 50, 1 do
-		nowPosition = nextPosition
-		nowVelocity = nextVelocity
-
-		if isInGoal() then
-			wasInGoalThisLoop = true
-			timeOutOfGoal = 0
-		end
-
-		calculatePrediction(dt)
-
-		if debugBallPrediction and true then
-			--WorldDraw.drawPoint(nextPosition, 0, 1, 0, 50, 0)
-			WorldDraw.drawLine(nowPosition, nextPosition, 0, 1, 0, 10, 0)
-		end
-	end
-
-	if wasInGoalThisLoop then
-		timeInGoal += deltaTime
-	else
-		timeOutOfGoal += deltaTime
-	end
-
-	if timeInGoal >= maxTimeInGoal then
-		wasInGoal = true
-	end
-
-	if timeOutOfGoal >= maxTimeOutOfGoal then
-		timeInGoal = 0
-		wasInGoal = false
 	end
 end
 
@@ -2400,6 +2231,48 @@ function handHeld(player: ReplayPlayer)
 	previousRightHandPosition = rightHandPosition
 end
 
+function checkForBallFollow(player: ReplayPlayer)
+	BallSim:tick()
+	local isInGoalInfo = BallSim:isInGoal()
+
+	if isFollowingBall then
+		local hasScored = arena.home.goal.box:checkPointIntersect(arena.ball.transform.position)
+			or arena.away.goal.box:checkPointIntersect(arena.ball.transform.position)
+		local isHeld = Util.isBallHeld(arena.ball, BallSim.radius, arena.players)
+		local notInGoal = not isInGoalInfo.home and not isInGoalInfo.away
+		local stopFollow = (notInGoal or hasScored or isHeld) and os.clock() > followBallStart + minBallFollowTime
+
+		if stopFollow then
+			isFollowingBall = false
+			return
+		end
+	end
+
+	if not isInGoalInfo.home and not isInGoalInfo.away then
+		return
+	end
+
+	local shotGoal = nil
+	if isInGoalInfo.home then
+		shotGoal = arena.home.goal
+	else
+		shotGoal = arena.away.goal
+	end
+
+	local oppositeGoal = (isInGoalInfo.home and player.teamIndex == Util.TeamIndex.AwayTeam)
+		or (isInGoalInfo.away and player.teamIndex == Util.TeamIndex.HomeTeam)
+	local isCorrectGoal = (
+		(ballGoalMode == BallGoalMode.EnemyGoal and oppositeGoal) or (ballGoalMode == BallGoalMode.BothGoals)
+	)
+	local isGoodShotDistance = Util.getDist(shotGoal.position, arena.ball.transform.position) > 1000
+	local isInAir = not Util.isBallHeld(arena.ball, BallSim.radius, arena.players)
+	local isGoal = (isInGoalInfo.home or isInGoalInfo.away) and isCorrectGoal and isGoodShotDistance and isInAir
+
+	if isGoal then
+		isFollowingBall = true
+	end
+end
+
 function withPlayer(player: ReplayPlayer)
 	camera.showNameTags = showNameTags
 
@@ -2413,7 +2286,7 @@ function withPlayer(player: ReplayPlayer)
 		end
 	end
 
-	if autoGoalCam and not (ballTarget and wasInGoal) then
+	if autoGoalCam and not isFollowingBall then
 		if arena:checkGoalCam(player) then
 			return
 		end
@@ -2430,35 +2303,13 @@ function withPlayer(player: ReplayPlayer)
 	end
 
 	if autoBall then
-		if
-			ballVelocity:length() > 100 * autoBallThreshold
-			and not ballTarget
-			and player.teamIndex ~= Util.TeamIndex.NoTeam
-		then
-			ballTarget = true
+		checkForBallFollow(player)
+		if isFollowingBall then
+			ballCam(30, Quat.identity)
+			return
 		end
-
-		if ballVelocity:length() < 500 and ballTarget or player.teamIndex == Util.TeamIndex.NoTeam then
-			timeInGoal = 0
-			ballTarget = false
-			wasInGoal = false
-		end
-
-		ballTarget = true
-
-		if ballTarget then
-			predictBall()
-
-			if wasInGoal then
-				if not doneOnceBall then
-					instaRotateBall = true
-				end
-				ballCam(30, Quat.identity)
-				return
-			end
-		end
-	else
-		ballTarget = false
+	elseif isFollowingBall then
+		isFollowingBall = false
 	end
 
 	if doneOnceBall then
@@ -2696,7 +2547,6 @@ type MessageValues = {
 	upGestureMode: number?,
 	backwardsGestureMode: number?,
 	autoBall: boolean?,
-	autoBallThreshold: number?,
 	autoGoalCam: boolean?,
 	ballGoalMode: number?,
 	goalMode: number?,
@@ -2812,10 +2662,6 @@ function onMessageReceived(messageTable: MessageValues)
 	-- autoBall is a boolean that determens wether the auto shooting camera is enabled or not. You are still able to change values assotiated with the auto shooting camera even if the auto shooting camera is disabled.
 	if messageTable.autoBall ~= nil then
 		autoBall = messageTable.autoBall
-	end
-	-- autoBallThreshold is a number that determens when the auto shooting camera should activate based on the currently tracked balls speed in m/s. Value can be set between 10 and 20.
-	if messageTable.autoBallThreshold then
-		autoBallThreshold = messageTable.autoBallThreshold
 	end
 	-- ballGoalMode is a number that determens whether the auto shooting camera should activate based on what goal is being shot at. (1 = Enemy Goal, 2 = Both Goals)
 	if messageTable.ballGoalMode then
