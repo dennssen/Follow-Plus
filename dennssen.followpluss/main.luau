@@ -3,7 +3,6 @@
 local _version: string = "1.9.0"
 
 -- TODO:
--- Switch to the new ball sim library instead of in house
 -- test new fp with old caster
 -- merge and release
 
@@ -2547,6 +2546,8 @@ type MessageValues = {
 	upGestureMode: number?,
 	backwardsGestureMode: number?,
 	autoBall: boolean?,
+	simResolutionScale: number?,
+	simTimeLength: number?,
 	autoGoalCam: boolean?,
 	ballGoalMode: number?,
 	goalMode: number?,
@@ -2662,6 +2663,14 @@ function onMessageReceived(messageTable: MessageValues)
 	-- autoBall is a boolean that determens wether the auto shooting camera is enabled or not. You are still able to change values assotiated with the auto shooting camera even if the auto shooting camera is disabled.
 	if messageTable.autoBall ~= nil then
 		autoBall = messageTable.autoBall
+	end
+	-- simResolutionScale is a number that sets the scale of the resolution of the ball prediciton. A resolution scale of 1 means the prediction is running at 90 fps, this is horrible for performance so it is recommended to have a resolution scale of around 0.3 when predicting far into the future.
+	if messageTable.simResolutionScale then
+		BallSim.resolutionScale = math.clamp(messageTable.simResolutionScale, 0.1, 1)
+	end
+	-- simTimeLength is a number that sets the amount of seconds into the future the ball predicition should predict.
+	if messageTable.simTimeLength then
+		BallSim.pathLengthSeconds = math.clamp(messageTable.simTimeLength, 0, 6)
 	end
 	-- ballGoalMode is a number that determens whether the auto shooting camera should activate based on what goal is being shot at. (1 = Enemy Goal, 2 = Both Goals)
 	if messageTable.ballGoalMode then

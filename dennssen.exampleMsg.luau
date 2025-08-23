@@ -28,7 +28,8 @@ type MessageValues = {
 	upGestureMode: number?,
 	backwardsGestureMode: number?,
 	autoBall: boolean?,
-	autoBallThreshold: number?,
+	simResolutionScale: number?,
+	simTimeLength: number?,
 	autoGoalCam: boolean?,
 	ballGoalMode: number?,
 	goalMode: number?,
@@ -100,7 +101,8 @@ local defaultValues: MessageValues = {
 	upGestureMode = CameraMode.FirstPerson, -- This tries to set the up gesture to First Person, but it will not work as these customizable gestures with directions don't accept First Person or Hand Held
 	backwardsGestureMode = CameraMode.HeadRotation, -- This sets the backwards gesture to its default mode. When changing gesture modes it is important to remember that First Person and HandHeld will not work.
 	autoBall = false, -- disables the auto shooting camera.
-	autoBallThreshold = 15, -- sets the auto shooting cameras threshold to 15, meaning it does not activate until the targeted ball goes atleast once over 15 m/s. Note that the threshold is still configurable even if the auto shooting camera is disabled.
+	simResolutionScale = 0.2, -- A resolution scale of 1 means the simulation is running at 90 fps, this will usually tank performance heavily.
+	simTimeLength = 4, -- sets the ball prediction to predict 4 seconds into the future.
 	ballGoalMode = BallGoalMode.EnemyGoal, -- sets the ball goal mode to Enemy Goal making it so the auto shooting camera only activates when the ball is being shot at the enemy goal.
 	autoGoalCam = false, -- disables the auto goal camera.
 	goalMode = GoalMode.BothGoals, -- sets the auto goal camera to activate when near both goals, instead of only your own teams goal.
