@@ -897,11 +897,11 @@ function onTransitionBegin()
 	end
 end
 
-function generateAsterisk(guiLabel: string, isEdited: boolean): string
+function generateAsterisk(guiLable: string, isEdited: boolean): string
 	if isEdited then
-		return `{guiLabel}(*)`
+		return `{guiLable}(*)###{guiLable}`
 	else
-		return guiLabel
+		return `{guiLable}###{guiLable}`
 	end
 end
 
@@ -1005,30 +1005,18 @@ function onGui()
 
 	Gui.newLine()
 
-	showNameTags = Gui.checkbox(nametagsLabel, showNameTags)
-	if not Gui.isItemActive() then
-		nametagsLabel = generateAsterisk("Nametags", showNameTags ~= profile.showNameTags)
-	end
+	showNameTags = Gui.checkbox(generateAsterisk(nametagsLabel, showNameTags ~= profile.showNameTags), showNameTags)
 	Gui.setItemTooltip("Enable or disable nametags for all players")
 
 	Gui.sameLine()
-	showQuests = Gui.checkbox(showQuestsLabel, showQuests)
-	if not Gui.isItemActive() then
-		showQuestsLabel = generateAsterisk("Show Quests", showQuests ~= profile.showQuests)
-	end
+	showQuests = Gui.checkbox(generateAsterisk(showQuestsLabel, showQuests ~= profile.showQuests), showQuests)
 	Gui.setItemTooltip("Will show the quest for the followed player when they activate a quest")
 
-	muteSelf = Gui.checkbox(muteSelfLabel, muteSelf)
-	if not Gui.isItemActive() then
-		muteSelfLabel = generateAsterisk("Mute Self", muteSelf ~= profile.muteSelf)
-	end
+	muteSelf = Gui.checkbox(generateAsterisk(muteSelfLabel, muteSelf ~= profile.muteSelf), muteSelf)
 	Gui.setItemTooltip("Enable or disable muting yourself or the player you are currently following")
 
 	Gui.sameLine()
-	isLeftHanded = Gui.checkbox(isLeftHandedLabel, isLeftHanded)
-	if not Gui.isItemActive() then
-		isLeftHandedLabel = generateAsterisk("Left Handed", isLeftHanded ~= profile.isLeftHanded)
-	end
+	isLeftHanded = Gui.checkbox(generateAsterisk(isLeftHandedLabel, isLeftHanded ~= profile.isLeftHanded), isLeftHanded)
 	Gui.setItemTooltip("Makes you left handed | Used for Hand Held mode")
 
 	--[[focusedArena = Gui.checkbox(focusedArenaLabel, focusedArena)
@@ -1037,10 +1025,10 @@ function onGui()
 	end
 	Gui.setItemTooltip("Mutes all Players OUTSIDE of the Arena the Followed Player is currently in")]]
 
-	targetPlayerName = Gui.inputText(targetPlayerNameLabel, targetPlayerName)
-	if not Gui.isItemActive() then
-		targetPlayerNameLabel = generateAsterisk("Follow Player", targetPlayerName ~= profile.targetPlayerName)
-	end
+	targetPlayerName = Gui.inputText(
+		generateAsterisk(targetPlayerNameLabel, targetPlayerName ~= profile.targetPlayerName),
+		targetPlayerName
+	)
 	Gui.setItemTooltip("The player to follow")
 
 	if Gui.isItemActive() and #frame.players > 0 then
@@ -1089,17 +1077,16 @@ function onGui()
 		Gui.unindent()
 	end
 
-	cameraFOV = Gui.sliderInt(cameraFOVLabel, cameraFOV, 40, 179)
-	if not Gui.isItemActive() then
-		cameraFOVLabel = generateAsterisk("Field Of View", cameraFOV ~= profile.fieldOfView)
-	end
+	cameraFOV = Gui.sliderInt(generateAsterisk(cameraFOVLabel, cameraFOV ~= profile.fieldOfView), cameraFOV, 40, 179)
 	Gui.setItemTooltip("The cameras field of view (FOV)")
 	cameraFOV = math.clamp(cameraFOV, 40, 179)
 
-	positionSmoothing = Gui.sliderFloat(positionSmoothingLabel, positionSmoothing, 0, 1)
-	if not Gui.isItemActive() then
-		positionSmoothingLabel = generateAsterisk("Camera Smoothing", positionSmoothing ~= profile.positionSmoothing)
-	end
+	positionSmoothing = Gui.sliderFloat(
+		generateAsterisk(positionSmoothingLabel, positionSmoothing ~= profile.positionSmoothing),
+		positionSmoothing,
+		0,
+		1
+	)
 	positionSmoothing = math.clamp(positionSmoothing, 0, 1)
 	Gui.setItemTooltip("The time it takes for the Camera to move from A to B")
 	Gui.newLine()
@@ -1107,16 +1094,13 @@ function onGui()
 	Gui.indent()
 	Gui.separatorText("Settings")
 
-	if Gui.beginCombo(cameraModeLabel, cameraModes[cameraMode]) then
+	if Gui.beginCombo(generateAsterisk(cameraModeLabel, cameraMode ~= profile.cameraMode), cameraModes[cameraMode]) then
 		for i = 1, #cameraModes do
 			if Gui.selectable(cameraModes[i], i == cameraMode) then
 				cameraMode = i
 			end
 		end
 		Gui.endCombo()
-	end
-	if not Gui.isItemActive() then
-		cameraModeLabel = generateAsterisk("Camera Mode", cameraMode ~= profile.cameraMode)
 	end
 	cameraMode = math.clamp(cameraMode, 1, #cameraModes)
 	Gui.setItemTooltip("Changes how the Camera behaves")
@@ -1127,10 +1111,7 @@ function onGui()
 		Gui.beginDisabled()
 	end
 
-	radius = Gui.dragFloat(radiusLabel, radius, 0.5, 0, 100)
-	if not Gui.isItemActive() then
-		radiusLabel = generateAsterisk("Radius", radius ~= profile.radius)
-	end
+	radius = Gui.dragFloat(generateAsterisk(radiusLabel, radius ~= profile.radius), radius, 0.5, 0, 100)
 
 	if
 		Gui.isItemActivated()
@@ -1151,10 +1132,7 @@ function onGui()
 		Gui.beginDisabled()
 	end
 
-	threshold = Gui.sliderFloat(thresholdLabel, threshold, 0, radius)
-	if not Gui.isItemActive() then
-		thresholdLabel = generateAsterisk("Smart Switch Distance", threshold ~= profile.threshold)
-	end
+	threshold = Gui.sliderFloat(generateAsterisk(thresholdLabel, threshold ~= profile.threshold), threshold, 0, radius)
 	Gui.setItemTooltip(
 		"The distance at which the camera will automatically switch between 1st and 3rd Person (Only works when using Head Rotation)"
 	)
@@ -1173,22 +1151,24 @@ function onGui()
 		Gui.beginDisabled()
 	end
 
-	cameraPositionOffset = Gui.dragFloat3(cameraPositionOffsetLabel, cameraPositionOffset, 1, -1000, 1000)
-	if not Gui.isItemActive() then
-		cameraPositionOffsetLabel = generateAsterisk(
-			"Camera Position Offset",
-			cameraPositionOffset ~= stringToVec3(profile.cameraPositionOffset)
-		)
-	end
+	cameraPositionOffset = Gui.dragFloat3(
+		generateAsterisk(cameraPositionOffsetLabel, cameraPositionOffset ~= stringToVec3(profile.cameraPositionOffset)),
+		cameraPositionOffset,
+		1,
+		-1000,
+		1000
+	)
 
 	cameraPositionOffset = Util.vec3Clamp(cameraPositionOffset, -1000, 1000)
 	Gui.setItemTooltip("The Cameras positional offset. Only applied in mode 'Head Rotation' and 'First Person'")
 
-	cameraEulerOffset = Gui.dragFloat3(cameraEulerOffsetLabel, cameraEulerOffset, 1, -math.huge, math.huge)
-	if not Gui.isItemActive() then
-		cameraEulerOffsetLabel =
-			generateAsterisk("Camera Rotation Offset", cameraEulerOffset ~= stringToVec3(profile.cameraEulerOffset))
-	end
+	cameraEulerOffset = Gui.dragFloat3(
+		generateAsterisk(cameraEulerOffsetLabel, cameraEulerOffset ~= stringToVec3(profile.cameraEulerOffset)),
+		cameraEulerOffset,
+		1,
+		-math.huge,
+		math.huge
+	)
 	Gui.setItemTooltip("The Cameras rotational offset. Only applied in mode 'Head Rotation'")
 
 	if cameraMode == CameraMode.VelocityRotation or cameraMode == CameraMode.FaceTheBall then
@@ -1196,66 +1176,8 @@ function onGui()
 	end
 
 	Gui.newLine()
+
 	local gestureHeaderAsterisk = false
-	if Gui.collapsingHeader(gestureControlsHeaderLabel .. "###gesturecontrols") then
-		Gui.indent()
-		gestureControls = Gui.checkbox(gestureControlsLabel .. "##3", gestureControls)
-		if not Gui.isItemActive() then
-			gestureControlsLabel = generateAsterisk("Enabled", gestureControls ~= profile.gestureControls)
-		end
-		Gui.setItemTooltip([[
-Be able to grab the camera and throw it to change modes
-	- Grab the camera with grip and trigger behind your head
-	- Let go without throwing for First Person]])
-		if gestureControls then
-			if Gui.beginCombo(forwardGestureModeLabel, gestureModes[forwardGestureMode - 1]) then
-				for i = 1, #gestureModes do
-					if Gui.selectable(gestureModes[i], i == forwardGestureMode - 1) then
-						forwardGestureMode = i + 1
-					end
-				end
-				Gui.endCombo()
-			end
-			if not Gui.isItemActive() then
-				forwardGestureModeLabel =
-					generateAsterisk("Forward Mode", forwardGestureMode ~= profile.forwardGestureMode)
-			end
-			forwardGestureMode = math.clamp(forwardGestureMode, 1, #cameraModes)
-			Gui.setItemTooltip("What Mode to change to when Throwing the Camera forward")
-
-			if Gui.beginCombo(upGestureModeLabel, gestureModes[upGestureMode - 1]) then
-				for i = 1, #gestureModes do
-					if Gui.selectable(gestureModes[i], i == upGestureMode - 1) then
-						upGestureMode = i + 1
-					end
-				end
-				Gui.endCombo()
-			end
-			if not Gui.isItemActive() then
-				upGestureModeLabel = generateAsterisk("Up Mode", upGestureMode ~= profile.upGestureMode)
-			end
-			upGestureMode = math.clamp(upGestureMode, 1, #cameraModes)
-			Gui.setItemTooltip("What Mode to change to when Throwing the Camera up")
-
-			if Gui.beginCombo(backwardsGestureModeLabel, gestureModes[backwardsGestureMode - 1]) then
-				for i = 1, #gestureModes do
-					if Gui.selectable(gestureModes[i], i == backwardsGestureMode - 1) then
-						backwardsGestureMode = i + 1
-					end
-				end
-				Gui.endCombo()
-			end
-			if not Gui.isItemActive() then
-				backwardsGestureModeLabel =
-					generateAsterisk("Backward Mode", backwardsGestureMode ~= profile.backwardsGestureMode)
-			end
-			backwardsGestureMode = math.clamp(backwardsGestureMode, 1, #cameraModes)
-			Gui.setItemTooltip("What Mode to change to when Throwing the Camera backward")
-		end
-		Gui.unindent()
-	end
-
-	-- check for changes in the collapsing header
 	if
 		backwardsGestureMode ~= profile.backwardsGestureMode
 		or upGestureMode ~= profile.upGestureMode
@@ -1264,34 +1186,98 @@ Be able to grab the camera and throw it to change modes
 	then
 		gestureHeaderAsterisk = true
 	end
-	gestureControlsHeaderLabel = generateAsterisk("Gesture Controls", gestureHeaderAsterisk)
+	if Gui.collapsingHeader(generateAsterisk(gestureControlsHeaderLabel, gestureHeaderAsterisk)) then
+		Gui.indent()
+		gestureControls = Gui.checkbox(
+			generateAsterisk(gestureControlsLabel, gestureControls ~= profile.gestureControls) .. "##3",
+			gestureControls
+		)
+		Gui.setItemTooltip([[
+Be able to grab the camera and throw it to change modes
+	- Grab the camera with grip and trigger behind your head
+	- Let go without throwing for First Person]])
+		if gestureControls then
+			if
+				Gui.beginCombo(
+					generateAsterisk(forwardGestureModeLabel, forwardGestureMode ~= profile.forwardGestureMode),
+					gestureModes[forwardGestureMode - 1]
+				)
+			then
+				for i = 1, #gestureModes do
+					if Gui.selectable(gestureModes[i], i == forwardGestureMode - 1) then
+						forwardGestureMode = i + 1
+					end
+				end
+				Gui.endCombo()
+			end
+			forwardGestureMode = math.clamp(forwardGestureMode, 1, #cameraModes)
+			Gui.setItemTooltip("What Mode to change to when Throwing the Camera forward")
+
+			if
+				Gui.beginCombo(
+					generateAsterisk(upGestureModeLabel, upGestureMode ~= profile.upGestureMode),
+					gestureModes[upGestureMode - 1]
+				)
+			then
+				for i = 1, #gestureModes do
+					if Gui.selectable(gestureModes[i], i == upGestureMode - 1) then
+						upGestureMode = i + 1
+					end
+				end
+				Gui.endCombo()
+			end
+			upGestureMode = math.clamp(upGestureMode, 1, #cameraModes)
+			Gui.setItemTooltip("What Mode to change to when Throwing the Camera up")
+
+			if
+				Gui.beginCombo(
+					generateAsterisk(backwardsGestureModeLabel, backwardsGestureMode ~= profile.backwardsGestureMode),
+					gestureModes[backwardsGestureMode - 1]
+				)
+			then
+				for i = 1, #gestureModes do
+					if Gui.selectable(gestureModes[i], i == backwardsGestureMode - 1) then
+						backwardsGestureMode = i + 1
+					end
+				end
+				Gui.endCombo()
+			end
+			backwardsGestureMode = math.clamp(backwardsGestureMode, 1, #cameraModes)
+			Gui.setItemTooltip("What Mode to change to when Throwing the Camera backward")
+		end
+		Gui.unindent()
+	end
+
+	-- check for changes in the collapsing header
 
 	Gui.newLine()
 	Gui.separatorText("Auto Cameras")
 
 	local autoShootingCameraAsterisk = false
-	if Gui.collapsingHeader(autoShootingCameraHeaderLabel .. "###autoshootingcamera") then
+	if autoBall ~= profile.autoBall or ballGoalMode ~= profile.ballGoalMode then
+		autoShootingCameraAsterisk = true
+	end
+	if Gui.collapsingHeader(generateAsterisk(autoShootingCameraHeaderLabel, autoShootingCameraAsterisk)) then
 		Gui.indent()
 
-		autoBall = Gui.checkbox(autoBallLabel, autoBall)
-		if not Gui.isItemActive() then
-			autoBallLabel = generateAsterisk("Enabled", autoBall ~= profile.autoBall)
-		end
+		autoBall = Gui.checkbox(generateAsterisk(autoBallLabel, autoBall ~= profile.autoBall), autoBall)
 		Gui.setItemTooltip(
 			"The camera will start Orbiting the Ball for a shot capture when the it detects a possible Shot"
 		)
 
 		if autoBall then
-			if Gui.beginCombo(ballCamGoalModeLabel, ballGoalModes[ballGoalMode]) then
+			if
+				Gui.beginCombo(
+					generateAsterisk(ballCamGoalModeLabel, ballGoalMode ~= profile.ballGoalMode),
+					ballGoalModes[ballGoalMode]
+				)
+			then
 				for i = 1, #ballGoalModes do
 					if Gui.selectable(ballGoalModes[i], i == ballGoalMode) then
 						ballGoalMode = i
 					end
 				end
 				Gui.endCombo()
-			end
-			if not Gui.isItemActive() then
-				ballCamGoalModeLabel = generateAsterisk("Ball Goal Mode", ballGoalMode ~= profile.ballGoalMode)
 			end
 			Gui.setItemTooltip(
 				"If the ball camera should only activate when being shot on the enemy goal, or if it should activate on both goals"
@@ -1308,29 +1294,21 @@ Be able to grab the camera and throw it to change modes
 		Gui.unindent()
 	end
 
-	if
-		autoBall ~= profile.autoBall
-		or ballGoalMode ~= profile.ballGoalMode
-		or autoBallThreshold ~= profile.autoBallThreshold
-	then
-		autoShootingCameraAsterisk = true
-	end
-	autoShootingCameraHeaderLabel = generateAsterisk("Auto Shooting Camera", autoShootingCameraAsterisk)
-
 	Gui.newLine()
 
 	local goalCameraAsterisk = false
-	if Gui.collapsingHeader(goalCameraHeaderLabel .. "###goalcamera") then
+	if autoGoalCam ~= profile.autoGoalCam or goalMode ~= profile.goalMode or distanceLerp ~= profile.distanceLerp then
+		goalCameraAsterisk = true
+	end
+	if Gui.collapsingHeader(generateAsterisk(goalCameraHeaderLabel, goalCameraAsterisk)) then
 		Gui.indent()
 
-		autoGoalCam = Gui.checkbox(autoGoalCamLabel .. "##2", autoGoalCam)
-		if not Gui.isItemActive() then
-			autoGoalCamLabel = generateAsterisk("Enabled", autoGoalCam ~= profile.autoGoalCam)
-		end
+		autoGoalCam =
+			Gui.checkbox(generateAsterisk(autoGoalCamLabel, autoGoalCam ~= profile.autoGoalCam) .. "##2", autoGoalCam)
 		Gui.setItemTooltip("Automatically positions the Camera inside the Goal when Targeted Player is close to Goal")
 
 		if autoGoalCam then
-			if Gui.beginCombo(goalModeLabel, goalModes[goalMode]) then
+			if Gui.beginCombo(generateAsterisk(goalModeLabel, goalMode ~= profile.goalMode), goalModes[goalMode]) then
 				for i = 1, #goalModes do
 					if Gui.selectable(goalModes[i], i == goalMode) then
 						goalMode = i
@@ -1338,25 +1316,19 @@ Be able to grab the camera and throw it to change modes
 				end
 				Gui.endCombo()
 			end
-			if not Gui.isItemActive() then
-				goalModeLabel = generateAsterisk("Mode", goalMode ~= profile.goalMode)
-			end
 			Gui.setItemTooltip("Determens which Goals to Activate at")
 
-			distanceLerp = Gui.sliderFloat(distanceLerpLabel, distanceLerp, 1, 10)
-			if not Gui.isItemActive() then
-				distanceLerpLabel = generateAsterisk("Player/Ball Ratio", distanceLerp ~= profile.distanceLerp)
-			end
+			distanceLerp = Gui.sliderFloat(
+				generateAsterisk(distanceLerpLabel, distanceLerp ~= profile.distanceLerp),
+				distanceLerp,
+				1,
+				10
+			)
 			Gui.setItemTooltip("The Look Ratio between the Player and the Ball. 0 is full Player, 10 is full Ball.")
 		end
 
 		Gui.unindent()
 	end
-
-	if autoGoalCam ~= profile.autoGoalCam or goalMode ~= profile.goalMode or distanceLerp ~= profile.distanceLerp then
-		goalCameraAsterisk = true
-	end
-	goalCameraHeaderLabel = generateAsterisk("Goal Camera", goalCameraAsterisk)
 
 	Gui.unindent()
 	Gui.newLine()
@@ -1512,6 +1484,12 @@ Be able to grab the camera and throw it to change modes
 		end
 		if not followFreecam and Gui.button("follow freecam") then
 			followFreecam = true
+			sendMessage(getCameraById("anotheraxiom.freecam"), {
+				messageType = "setTransform",
+				rotation = camera.rotation,
+				position = camera.position,
+				fieldOfView = camera.fieldOfView,
+			})
 			camera:followCamera(getCameraById("anotheraxiom.freecam"))
 		end
 
@@ -1827,7 +1805,7 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 			local leftHandTransform = Transform.identity
 			leftHandTransform.position = Vec3.lerp(
 				leftHandPosition,
-				leftHandPosition + Util.vec3ClampLength((throwVelocity * throwBoost), 500),
+				leftHandPosition + Util.clampMagnitude3((throwVelocity * throwBoost), 500),
 				releaseTimers.left / maxLetGoTime
 			)
 			if throwVelocity ~= Vec3.zeroVector then
@@ -1889,7 +1867,7 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 			end
 			rightHandTransform.position = Vec3.lerp(
 				rightHandPosition,
-				rightHandPosition + Util.vec3ClampLength((throwVelocity * throwBoost), 500),
+				rightHandPosition + Util.clampMagnitude3((throwVelocity * throwBoost), 500),
 				releaseTimers.right / maxLetGoTime
 			)
 			if throwVelocity ~= Vec3.zeroVector then
@@ -2308,7 +2286,6 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 		Box.new(player.root.position + verticalOffset + horizontalOffset, Vec3.new(5, 50, 100), playerChestRotation)
 
 	if debugFaceTheBall then
-		WorldDraw.clear()
 		playerBox:render(0.7, 0.15, 0.15)
 	end
 
@@ -2641,6 +2618,8 @@ function tick(dt)
 		onExit()
 		return
 	end
+
+	WorldDraw.clear()
 
 	deltaTime = dt
 	frame = Util.getReplayFrameFromIndex(readLocation)
