@@ -1,12 +1,34 @@
 --!strict
 
 local _version: string = "1.9.0"
-metadata = {
-	name = "Follow Pluss",
-	description = "A highly customisable multitool for all your following needs, including but not limited to: 5 different Camera Modes, 2 Auto Cameras, Replay Compatability, and More!",
-	author = "Dennssen",
-	defaultKeybind = "F",
+
+-- TODO:
+-- Switch to the new ball sim library instead of in house
+-- test new fp with old caster
+-- merge and release
+
+-- dependecies
+local Util = require("util")
+
+local Emotes = require("emotes")
+type Emote = Emotes.Emote
+type Emotes = Emotes.Emotes
+
+local Box = require("box")
+type BoxType = typeof(Box)
+
+type GoalCamData = {
+	goalCam: { position: Vec3, rotation: Quat },
 }
+
+local Arena = require("arena")
+type Arena<ArenaData, HomeData, AwayData> = Arena.Arena<ArenaData, HomeData, AwayData>
+type FollowArena = Arena<{}, GoalCamData, GoalCamData> & {
+	checkGoalCam: (self: FollowArena, player: ReplayPlayer) -> boolean,
+	goalCam: (self: FollowArena, goalPosition: Vec3, goalRotation: Quat) -> (),
+}
+
+local BallSim = require("ballsim")
 
 local frame: ReplayFrame
 
@@ -17,29 +39,6 @@ local CameraMode = {
 	FaceTheBall = 4,
 	HandHeld = 5,
 }
-
-local TeamIndex = {
-	NoTeam = -1,
-	HomeTeam = 0,
-	AwayTeam = 1,
-}
-
-function debugPrint(s: any)
-	if Input.getKeyDown(Input.Key.N) then
-		print(s)
-	end
-end
-
-local function parseBallJSON(str)
-	-- Table to store the parsed data
-	local result = {}
-
-	-- Parse type
-	local typeVal = string.match(str, '"type"%s*:%s*([%d]+)')
-	result.type = tonumber(typeVal)
-
-	return result
-end
 
 --(A2.Vector){ 0.000000, 0.000000, -180.000000 }
 function stringToVec3(string: string): Vec3
@@ -72,51 +71,12 @@ function muteList(mute: boolean, players: { ReplayPlayer })
 	end
 end
 
-local arenaLoadTime: number = 0
-local getArenaDelay: number = 7
-
-function getDictSize(dict): number
-	local i = 0
-
-	if dict == nil then
-		return i
-	end
-
-	for _, _ in dict do
-		i += 1
-	end
-
-	return i
-end
-
-function getDictIndex(dict, index: number)
-	local i = 0
-	local dictSize = getDictSize(dict)
-	local dictItem = nil
-
-	if index < 0 or index > dictSize then
-		return dictItem
-	end
-
-	for _, item in dict do
-		if i == index then
-			dictItem = item
-			break
-		end
-
-		i += 1
-	end
-
-	return dictItem
-end
-
 local function initializeProfiles()
 	local saveToConfig = false
 	local neededValues = {
 		radius = 20,
 		distanceLerp = 4,
 		readLocation = 0,
-		autoBallThreshold = 12,
 		ballGoalMode = 1,
 		cameraPositionOffset = "(A2.Vector){ 0.000000, 0.000000, 0.000000 }",
 		cameraEulerOffset = "(A2.Vector){ 0.000000, 0.000000, 0.000000 }",
@@ -127,6 +87,8 @@ local function initializeProfiles()
 		autoGoalCam = false,
 		goalMode = 1,
 		autoBall = false,
+		simResolutionScale = 0.2,
+		simTimeLength = 4,
 		targetPlayerName = "YourName",
 		cameraMode = CameraMode.HeadRotation,
 		muteSelf = false,
@@ -192,6 +154,7 @@ if profile == nil then
 end
 
 local deltaTime: number = 0
+local readLocation = profile.readLocation -- 0: Live, 1 or above: Replay
 
 -- VOIP
 local isSelfMuted = false
@@ -224,26 +187,14 @@ local ballRotation: Quat = Quat.identity
 local ballVelocity: Vec3 = Vec3.zeroVector
 local ballArena: number = nil
 local autoBall = profile.autoBall
-local autoBallThreshold = profile.autoBallThreshold
-local ballTarget = false
+BallSim.resolutionScale = profile.simResolutionScale
+BallSim.pathLengthSeconds = profile.simTimeLength
 local doneOnceBall = false
 local instaRotateBall = false
-local acceleration: Vec3 = Vec3.zeroVector
-local nowVelocity: Vec3 = Vec3.zeroVector
-local nowPosition: Vec3 = nil
-local nextVelocity: Vec3 = Vec3.zeroVector
-local nextPosition: Vec3 = nil
 
-local wasInGoal: boolean = false
-local timeOutOfGoal = 0
-local maxTimeOutOfGoal = 2
-local timeInGoal = 0
-local maxTimeInGoal = 1
-
-local rollingFriction = 0.98
-local dampingFactor = 0.5
-local GravityScale = -300
-local drag = 0.025
+local isFollowingBall: boolean = false
+local followBallStart: number = 0
+local minBallFollowTime: number = 1.3
 
 local ballGoalMode: number = profile.ballGoalMode
 local ballGoalModes = { "Enemy Goal", "Both Goals" }
@@ -252,337 +203,13 @@ local BallGoalMode = {
 	BothGoals = 2,
 }
 
--- arena
-type Local = {
-	position: Vec3,
-	normal: Vec3,
-	length: number,
-}
+local cachedGamemodeAmount: number = 0
 
-type BoxType = {
-	__index: BoxType,
-	position: Vec3,
-	size: Vec3,
-	rotation: Quat,
-	vertexLocations: { Vec3 },
-	locals: {
-		x: Local,
-		y: Local,
-		z: Local,
-	},
+local FollowArena = {} :: FollowArena
+FollowArena.__index = FollowArena
+setmetatable(FollowArena, { __index = Arena })
 
-	__tostring: (self: BoxType) -> string,
-	new: (inputPosition: Vec3, inputSize: Vec3, inputRotation: Quat) -> BoxType,
-	setPosition: (self: BoxType, inputPosition: Vec3) -> (),
-	setSize: (self: BoxType, inputPosition: Vec3) -> (),
-	setRotation: (self: BoxType, inputPosition: Quat) -> (),
-	setRotationDeg: (self: BoxType, inputRotation: Vec3) -> (),
-	generatePoints: (self: BoxType) -> (),
-	render: (self: BoxType, r: number, g: number, b: number) -> (),
-	checkPointIntersect: (self: BoxType, point: Vec3) -> boolean,
-	getClosestPoint: (self: BoxType, point: Vec3, surfaceOnly: boolean) -> Vec3,
-
-	empty: BoxType,
-}
-
-local Box: BoxType = {} :: BoxType
-Box.__index = Box
-
-function Box.new(inputPosition: Vec3, inputSize: Vec3, inputRotation: Quat): BoxType
-	local self: BoxType = setmetatable({}, Box) :: any
-
-	self.position = inputPosition
-	self.size = inputSize
-	self.rotation = inputRotation
-
-	self.vertexLocations = {}
-	self.locals = {
-		x = {
-			position = Vec3.zeroVector,
-			normal = Vec3.zeroVector,
-			length = 0,
-		},
-		y = {
-			position = Vec3.zeroVector,
-			normal = Vec3.zeroVector,
-			length = 0,
-		},
-		z = {
-			position = Vec3.zeroVector,
-			normal = Vec3.zeroVector,
-			length = 0,
-		},
-	}
-	self:generatePoints()
-	return self
-end
-
-function Box:setPosition(inputPosition: Vec3): ()
-	self.position = inputPosition
-	self:generatePoints()
-end
-
-function Box:setSize(inputSize: Vec3): ()
-	self.size = inputSize
-	self:generatePoints()
-end
-
-function Box:setRotation(inputRotation: Quat): ()
-	self.rotation = inputRotation
-	self:generatePoints()
-end
-
-function Box:setRotationDeg(inputRotation: Vec3): ()
-	self.rotation = Quat.fromEuler(inputRotation.x, inputRotation.y, inputRotation.z)
-	self:generatePoints()
-end
-
-function Box:generatePoints(): ()
-	local shift = { x = self.size.x / 2, y = self.size.y / 2, z = self.size.z / 2 }
-	local newVertexLocations = {
-		Vec3.new(shift.x, shift.y, shift.z),
-		Vec3.new(shift.x, shift.y, -shift.z),
-		Vec3.new(shift.x, -shift.y, shift.z),
-		Vec3.new(shift.x, -shift.y, -shift.z),
-		Vec3.new(-shift.x, shift.y, shift.z),
-		Vec3.new(-shift.x, shift.y, -shift.z),
-		Vec3.new(-shift.x, -shift.y, shift.z),
-		Vec3.new(-shift.x, -shift.y, -shift.z),
-	}
-
-	for i = 1, #newVertexLocations do
-		newVertexLocations[i] = self.rotation:rotateVector(newVertexLocations[i])
-	end
-
-	-- Translate the vertices by the box position.
-	for i = 1, #newVertexLocations do
-		newVertexLocations[i].x = newVertexLocations[i].x + self.position.x
-		newVertexLocations[i].y = newVertexLocations[i].y + self.position.y
-		newVertexLocations[i].z = newVertexLocations[i].z + self.position.z
-	end
-
-	self.vertexLocations = newVertexLocations
-
-	self.locals.x.position = self.vertexLocations[5] - self.vertexLocations[1]
-	self.locals.y.position = self.vertexLocations[3] - self.vertexLocations[1]
-	self.locals.z.position = self.vertexLocations[2] - self.vertexLocations[1]
-
-	for _, l: Local in self.locals :: { Local } do
-		l.normal = l.position:getSafeNormal()
-		l.length = l.position:length()
-	end
-end
-
-function Box:render(r: number, g: number, b: number): ()
-	local lines: { { start: Vec3, finish: Vec3 } } = {
-		{ start = self.vertexLocations[1], finish = self.vertexLocations[2] },
-		{ start = self.vertexLocations[1], finish = self.vertexLocations[3] },
-		{ start = self.vertexLocations[1], finish = self.vertexLocations[5] },
-		{ start = self.vertexLocations[4], finish = self.vertexLocations[2] },
-		{ start = self.vertexLocations[4], finish = self.vertexLocations[3] },
-		{ start = self.vertexLocations[4], finish = self.vertexLocations[8] },
-		{ start = self.vertexLocations[7], finish = self.vertexLocations[8] },
-		{ start = self.vertexLocations[7], finish = self.vertexLocations[3] },
-		{ start = self.vertexLocations[7], finish = self.vertexLocations[5] },
-		{ start = self.vertexLocations[6], finish = self.vertexLocations[5] },
-		{ start = self.vertexLocations[6], finish = self.vertexLocations[2] },
-		{ start = self.vertexLocations[6], finish = self.vertexLocations[8] },
-	}
-
-	WorldDraw.drawPoint(self.position, 0.2, 3, 0.2, 5, 0)
-	for i: number, line: { start: Vec3, finish: Vec3 } in lines do
-		WorldDraw.drawLine(line.start, line.finish, r, g, b, 4, 0)
-	end
-
-	WorldDraw.drawLine(self.position, self.position + self.rotation:getForwardVector() * 100, 1, 0, 0, 10, 0)
-	WorldDraw.drawLine(self.position, self.position + self.rotation:getUpVector() * 100, 0, 1, 0, 10, 0)
-	WorldDraw.drawLine(self.position, self.position + self.rotation:getRightVector() * 100, 0, 0, 1, 10, 0)
-end
-
-function Box:checkPointIntersect(point: Vec3?): boolean
-	if point == nil then
-		return false
-	end
-
-	local zeroPoint: Vec3 = self.vertexLocations[1]
-	local fullPoint: Vec3 = self.vertexLocations[8]
-	local centerPoint: Vec3 = (zeroPoint + fullPoint) / 2
-
-	local projectionVector: Vec3 = point - centerPoint
-
-	local pX: number = math.abs(Vec3.dot(projectionVector, self.locals.x.normal))
-	local pY: number = math.abs(Vec3.dot(projectionVector, self.locals.y.normal))
-	local pZ: number = math.abs(Vec3.dot(projectionVector, self.locals.z.normal))
-
-	if 2 * pX <= self.locals.x.length and 2 * pY <= self.locals.y.length and 2 * pZ <= self.locals.z.length then
-		return true
-	else
-		return false
-	end
-end
-
-function Box:getClosestPoint(point: Vec3, surfaceOnly: boolean): Vec3
-	local pointOffset = point - self.position
-	local localPoint = self.rotation:inverse():rotateVector(pointOffset)
-	local boxExtents = Vec3.new(self.size.x / 2, self.size.y / 2, self.size.z / 2)
-
-	local clamped = Vec3.new(
-		math.clamp(localPoint.x, -boxExtents.x, boxExtents.x),
-		math.clamp(localPoint.y, -boxExtents.y, boxExtents.y),
-		math.clamp(localPoint.z, -boxExtents.z, boxExtents.z)
-	)
-
-	if surfaceOnly and self:checkPointIntersect(localPoint) then
-		local dx = math.min(boxExtents.x - localPoint.x, localPoint.x + boxExtents.x)
-		local dy = math.min(boxExtents.y - localPoint.y, localPoint.y + boxExtents.y)
-		local dz = math.min(boxExtents.z - localPoint.z, localPoint.z + boxExtents.z)
-
-		if dx <= dy and dx <= dz then
-			if localPoint.x > 0 then
-				clamped.x = boxExtents.x
-			else
-				clamped.x = -boxExtents.x
-			end
-		elseif dy <= dz then
-			if localPoint.y > 0 then
-				clamped.y = boxExtents.y
-			else
-				clamped.y = -boxExtents.y
-			end
-		else
-			if localPoint.z > 0 then
-				clamped.z = boxExtents.z
-			else
-				clamped.z = -boxExtents.z
-			end
-		end
-	end
-
-	local worldClosest = self.rotation:rotateVector(clamped) + self.position
-
-	return worldClosest
-end
-
-Box.empty = Box.new(Vec3.zeroVector, Vec3.zeroVector, Quat.identity)
-
-type ArenaTeam = {
-	goal: {
-		position: Vec3,
-		rotation: Quat,
-		box: BoxType,
-	},
-	goalCam: {
-		position: Vec3,
-		rotation: Quat,
-	},
-	players: { ReplayPlayer },
-}
-
-type Arena = {
-	__index: Arena,
-	type: string,
-
-	slotId: string,
-	name: string,
-	transform: Transform,
-	box: BoxType,
-	home: ArenaTeam,
-	away: ArenaTeam,
-	players: { ReplayPlayer },
-
-	new: (gamemode: ModuleStateSpectatorLuaApi) -> Arena,
-	tick: (self: Arena) -> (),
-	setTeams: (self: Arena) -> (),
-
-	-- Overrides
-	isPointOnHomeSide: (self: Arena, point: Vec3) -> boolean,
-	setupDimensions: (self: Arena) -> (),
-	getTeamRotation: (self: Arena, teamIndex: number) -> Quat,
-	checkGoalCam: (self: Arena, player: ReplayPlayer) -> boolean,
-	goalCam: (self: Arena, goalPosition: Vec3, goalRotation: Quat) -> (),
-
-	GUIChangeDimensions: (self: Arena) -> (), -- Debuging
-}
-
-local Arena: Arena = {} :: Arena
-Arena.__index = Arena
-
-function Arena.new(gamemode: ModuleStateSpectatorLuaApi): Arena
-	local self: Arena = setmetatable({}, Arena) :: any
-
-	self.slotId = gamemode:getSlotId()
-	self.transform = gamemode:getTransform()
-	self.players = {}
-
-	self.home = {
-		goal = {
-			position = Vec3.zeroVector,
-			rotation = Quat.identity,
-			box = Box.empty,
-		},
-		goalCam = {
-			position = Vec3.zeroVector,
-			rotation = Quat.identity,
-		},
-		players = {},
-	}
-
-	self.away = {
-		goal = {
-			position = Vec3.zeroVector,
-			rotation = Quat.identity,
-			box = Box.empty,
-		},
-		goalCam = {
-			position = Vec3.zeroVector,
-			rotation = Quat.identity,
-		},
-		players = {},
-	}
-
-	print(`made arena {self.slotId}`)
-
-	return self
-end
-
-function Arena:tick()
-	self:setTeams()
-end
-
-function Arena:setTeams()
-	local tempHome = {}
-	local tempAway = {}
-
-	for _, player in frame.players do
-		if player.teamIndex == TeamIndex.NoTeam then
-			continue
-		end
-
-		if not self.box:checkPointIntersect(player.root.position) then
-			continue
-		end
-
-		if player.teamIndex == TeamIndex.HomeTeam then
-			table.insert(tempHome, player)
-		elseif player.teamIndex == TeamIndex.AwayTeam then
-			table.insert(tempAway, player)
-		end
-	end
-
-	self.home.players = tempHome
-	self.away.players = tempAway
-
-	local allPlayers = {}
-	for _, player in self.home.players do
-		table.insert(allPlayers, player)
-	end
-	for _, player in self.away.players do
-		table.insert(allPlayers, player)
-	end
-	self.players = allPlayers
-end
-
-type Arena3v3 = Arena & {
+type Arena3v3 = FollowArena & {
 	homeRotationOffset: Quat,
 	awayRotationOffset: Quat,
 	boxSize: Vec3,
@@ -602,7 +229,7 @@ type Arena3v3 = Arena & {
 
 local Arena3v3 = {} :: Arena3v3
 Arena3v3.__index = Arena3v3
-setmetatable(Arena3v3, { __index = Arena })
+setmetatable(Arena3v3, { __index = FollowArena })
 
 Arena3v3.homeRotationOffset = Quat.fromEuler(0, 0, 90)
 Arena3v3.awayRotationOffset = Quat.fromEuler(0, 0, -90)
@@ -620,17 +247,27 @@ Arena3v3.overHaloRotation = Quat.identity
 Arena3v3.enterGoalCamDist = 500
 Arena3v3.exitGoalCamDist = 750
 
-function Arena3v3.new(gamemode: ModuleStateSpectatorLuaApi): Arena
-	local self = setmetatable(Arena.new(gamemode), Arena3v3) :: any
+function Arena3v3.new(gamemode: ModuleStateSpectatorLuaApi): FollowArena
+	local self: FollowArena = setmetatable(FollowArena.new(gamemode, readLocation), Arena3v3) :: any
 	self.type = "3v3"
 	self.name = self.slotId:gsub("TKB_", "")
+
+	self.home.data = { goalCam = {
+		position = Vec3.zeroVector,
+		rotation = Quat.identity,
+	} }
+	self.away.data = { goalCam = {
+		position = Vec3.zeroVector,
+		rotation = Quat.identity,
+	} }
+
 	self:setupDimensions()
 	return self :: Arena3v3
 end
 
 function Arena3v3:isPointOnHomeSide(point: Vec3): boolean
 	local homeDirection = (self.transform.rotation * Arena3v3.homeRotationOffset):getForwardVector()
-	local ballDirection = getForward(self.transform.position, point)
+	local ballDirection = Util.getForward(self.transform.position, point)
 	if homeDirection:dot(ballDirection) >= 0 then
 		return true
 	else
@@ -654,7 +291,7 @@ function Arena3v3:setupDimensions()
 
 	self.home.goal.box = Box.new(self.home.goal.position, Arena3v3.goalBoxSize, self.home.goal.rotation)
 
-	self.home.goalCam = {
+	self.home.data.goalCam = {
 		position = self.transform.position
 			+ (self.transform.rotation * Arena3v3.homeRotationOffset):rotateVector(Arena3v3.goalCamPositionOffset),
 		rotation = self.home.goal.rotation,
@@ -668,7 +305,7 @@ function Arena3v3:setupDimensions()
 	}
 	self.away.goal.box = Box.new(self.away.goal.position, Arena3v3.goalBoxSize, self.away.goal.rotation)
 
-	self.away.goalCam = {
+	self.away.data.goalCam = {
 		position = self.transform.position
 			+ (self.transform.rotation * Arena3v3.awayRotationOffset):rotateVector(Arena3v3.goalCamPositionOffset),
 		rotation = self.away.goal.rotation,
@@ -677,9 +314,9 @@ end
 
 function Arena3v3:getTeamRotation(teamIndex: number): Quat
 	local rotation = Quat.identity
-	if teamIndex == TeamIndex.HomeTeam then
+	if teamIndex == Util.TeamIndex.HomeTeam then
 		rotation = self.transform.rotation * Arena3v3.homeRotationOffset
-	elseif teamIndex == TeamIndex.AwayTeam then
+	elseif teamIndex == Util.TeamIndex.AwayTeam then
 		rotation = self.transform.rotation * Arena3v3.awayRotationOffset
 	end
 
@@ -689,10 +326,13 @@ end
 function Arena3v3:checkGoalCam(player: ReplayPlayer): boolean
 	if
 		not cameraInAwayGoal
-		and getDist(self.away.goal.position, player.root.position) < Arena3v3.enterGoalCamDist
-		and player.teamIndex ~= TeamIndex.NoTeam
+		and Util.getDist(self.away.goal.position, player.root.position) < Arena3v3.enterGoalCamDist
+		and player.teamIndex ~= Util.TeamIndex.NoTeam
 	then
-		if goalMode == GoalMode.MyGoal and player.teamIndex == TeamIndex.AwayTeam or goalMode == GoalMode.BothGoals then
+		if
+			goalMode == GoalMode.MyGoal and player.teamIndex == Util.TeamIndex.AwayTeam
+			or goalMode == GoalMode.BothGoals
+		then
 			if not doneOnce then
 				instaRotate = true
 			end
@@ -703,10 +343,13 @@ function Arena3v3:checkGoalCam(player: ReplayPlayer): boolean
 
 	if
 		not cameraInHomeGoal
-		and getDist(self.home.goal.position, player.root.position) < Arena3v3.enterGoalCamDist
-		and player.teamIndex ~= TeamIndex.NoTeam
+		and Util.getDist(self.home.goal.position, player.root.position) < Arena3v3.enterGoalCamDist
+		and player.teamIndex ~= Util.TeamIndex.NoTeam
 	then
-		if goalMode == GoalMode.MyGoal and player.teamIndex == TeamIndex.HomeTeam or goalMode == GoalMode.BothGoals then
+		if
+			goalMode == GoalMode.MyGoal and player.teamIndex == Util.TeamIndex.HomeTeam
+			or goalMode == GoalMode.BothGoals
+		then
 			if not doneOnce then
 				instaRotate = true
 			end
@@ -715,21 +358,21 @@ function Arena3v3:checkGoalCam(player: ReplayPlayer): boolean
 		end
 	end
 
-	if cameraInAwayGoal and getDist(self.away.goal.position, player.root.position) > Arena3v3.exitGoalCamDist then
+	if cameraInAwayGoal and Util.getDist(self.away.goal.position, player.root.position) > Arena3v3.exitGoalCamDist then
 		cameraInAwayGoal = false
 		cameraInGoal = false
 	end
 
-	if cameraInHomeGoal and getDist(self.home.goal.position, player.root.position) > Arena3v3.exitGoalCamDist then
+	if cameraInHomeGoal and Util.getDist(self.home.goal.position, player.root.position) > Arena3v3.exitGoalCamDist then
 		cameraInHomeGoal = false
 		cameraInGoal = false
 	end
 
 	if cameraInAwayGoal then
-		self:goalCam(self.away.goalCam.position, self.away.goalCam.rotation)
+		self:goalCam(self.away.data.goalCam.position, self.away.data.goalCam.rotation)
 		return true
 	elseif cameraInHomeGoal then
-		self:goalCam(self.home.goalCam.position, self.home.goalCam.rotation)
+		self:goalCam(self.home.data.goalCam.position, self.home.data.goalCam.rotation)
 		return true
 	end
 
@@ -750,7 +393,7 @@ function Arena3v3:goalCam(goalPosition: Vec3, goalRotation: Quat)
 
 	local cameraRotation = goalRotation
 
-	local ballDirection = getForward(camera.position, ballPosition)
+	local ballDirection = Util.getForward(camera.position, ballPosition)
 	local horizontallyAlignedBallDirection = (ballDirection - ballDirection:projectOnTo(gravity.upDirection)):normalize()
 	local ballCameraAlignment = self.transform.rotation:getForwardVector():dot(horizontallyAlignedBallDirection)
 
@@ -767,8 +410,8 @@ function Arena3v3:goalCam(goalPosition: Vec3, goalRotation: Quat)
 
 	local bridgeLine = self.transform.position + self.transform.rotation:getUpVector() * Arena3v3.bridgeHeightOffset
 	local haloLine = self.transform.position + self.transform.rotation:getUpVector() * Arena3v3.haloHeightOffset
-	local ballIsOverBridge = self.transform.rotation:getUpVector():dot(getForward(bridgeLine, ballPosition)) > 0
-	local ballIsOverHalo = self.transform.rotation:getUpVector():dot(getForward(haloLine, ballPosition)) > 0
+	local ballIsOverBridge = self.transform.rotation:getUpVector():dot(Util.getForward(bridgeLine, ballPosition)) > 0
+	local ballIsOverHalo = self.transform.rotation:getUpVector():dot(Util.getForward(haloLine, ballPosition)) > 0
 
 	if ballIsOverHalo then
 		cameraRotation *= Arena3v3.overHaloRotation
@@ -801,7 +444,7 @@ function Arena3v3:GUIChangeDimensions()
 	self:setupDimensions()
 end
 
-type Arena4v4 = Arena & {
+type Arena4v4 = FollowArena & {
 	homeRotationOffset: Quat,
 	awayRotationOffset: Quat,
 	boxSize: Vec3,
@@ -813,7 +456,7 @@ type Arena4v4 = Arena & {
 
 local Arena4v4 = {} :: Arena4v4
 Arena4v4.__index = Arena4v4
-setmetatable(Arena4v4, { __index = Arena })
+setmetatable(Arena4v4, { __index = FollowArena })
 
 Arena4v4.homeRotationOffset = Quat.fromEuler(0, 0, -90)
 Arena4v4.awayRotationOffset = Quat.fromEuler(0, 0, 90)
@@ -823,8 +466,8 @@ Arena4v4.centerBoxOffset = Vec3.new(0, 0, 250)
 Arena4v4.goalBoxSize = Vec3.new(200, 450, 225)
 Arena4v4.goalPositionOffset = Vec3.new(4075, 0, 175)
 
-function Arena4v4.new(gamemode: ModuleStateSpectatorLuaApi): Arena
-	local self = setmetatable(Arena.new(gamemode), Arena4v4) :: any
+function Arena4v4.new(gamemode: ModuleStateSpectatorLuaApi): FollowArena
+	local self: FollowArena = setmetatable(FollowArena.new(gamemode, readLocation), Arena4v4) :: any
 	self.type = "4v4"
 	self.name = `Jakeball {self.slotId:sub(self.slotId:len() - 2)}`
 	self:setupDimensions()
@@ -833,7 +476,7 @@ end
 
 function Arena4v4:isPointOnHomeSide(point: Vec3): boolean
 	local homeDirection = (self.transform.rotation * Arena4v4.homeRotationOffset):getForwardVector()
-	local ballDirection = getForward(self.transform.position, point)
+	local ballDirection = Util.getForward(self.transform.position, point)
 	if homeDirection:dot(ballDirection) >= 0 then
 		return true
 	else
@@ -868,9 +511,9 @@ end
 
 function Arena4v4:getTeamRotation(teamIndex: number): Quat
 	local rotation = Quat.identity
-	if teamIndex == TeamIndex.HomeTeam then
+	if teamIndex == Util.TeamIndex.HomeTeam then
 		rotation = self.transform.rotation * Arena4v4.homeRotationOffset
-	elseif teamIndex == TeamIndex.AwayTeam then
+	elseif teamIndex == Util.TeamIndex.AwayTeam then
 		rotation = self.transform.rotation * Arena4v4.awayRotationOffset
 	end
 
@@ -901,7 +544,7 @@ function Arena4v4:GUIChangeDimensions()
 	self:setupDimensions()
 end
 
-type Driftblitz = Arena & {
+type Driftblitz = FollowArena & {
 	homeRotationOffset: Quat,
 	awayRotationOffset: Quat,
 	boxSize: Vec3,
@@ -913,7 +556,7 @@ type Driftblitz = Arena & {
 
 local Driftblitz = {} :: Driftblitz
 Driftblitz.__index = Driftblitz
-setmetatable(Driftblitz, { __index = Arena })
+setmetatable(Driftblitz, { __index = FollowArena })
 
 Driftblitz.homeRotationOffset = Quat.fromEuler(0, 0, 90)
 Driftblitz.awayRotationOffset = Quat.fromEuler(0, 0, -90)
@@ -923,8 +566,8 @@ Driftblitz.centerBoxOffset = Vec3.new(0, 0, 100)
 Driftblitz.goalBoxSize = Vec3.new(100, 890, 300)
 Driftblitz.goalPositionOffset = Vec3.new(5295, 0, 175)
 
-function Driftblitz.new(gamemode: ModuleStateSpectatorLuaApi): Arena
-	local self = setmetatable(Arena.new(gamemode), Driftblitz) :: any
+function Driftblitz.new(gamemode: ModuleStateSpectatorLuaApi): FollowArena
+	local self = setmetatable(FollowArena.new(gamemode, readLocation), Driftblitz) :: any
 	self.name = self.slotId
 	self.type = "driftblitz"
 	self:setupDimensions()
@@ -933,7 +576,7 @@ end
 
 function Driftblitz:isPointOnHomeSide(point: Vec3): boolean
 	local homeDirection = (self.transform.rotation * Driftblitz.homeRotationOffset):getForwardVector()
-	local ballDirection = getForward(self.transform.position, point)
+	local ballDirection = Util.getForward(self.transform.position, point)
 	if homeDirection:dot(ballDirection) >= 0 then
 		return true
 	else
@@ -968,9 +611,9 @@ end
 
 function Driftblitz:getTeamRotation(teamIndex: number): Quat
 	local rotation = Quat.identity
-	if teamIndex == TeamIndex.HomeTeam then
+	if teamIndex == Util.TeamIndex.HomeTeam then
 		rotation = self.transform.rotation * Driftblitz.homeRotationOffset
-	elseif teamIndex == TeamIndex.AwayTeam then
+	elseif teamIndex == Util.TeamIndex.AwayTeam then
 		rotation = self.transform.rotation * Driftblitz.awayRotationOffset
 	end
 
@@ -1006,21 +649,21 @@ function Driftblitz:GUIChangeDimensions()
 	self:setupDimensions()
 end
 
-function getArenas(): { [any]: Arena }
-	local arenas: { [any]: Arena } = {}
+function getArenas(): { [any]: FollowArena }
+	local arenas: { [any]: FollowArena } = {}
 	local gamemodes = SpectatorGamemodes.listGamemodes()
 	print("got gamemodes in getArenas")
 	for _, gamemode in gamemodes do
 		local slotId = gamemode:getSlotId()
 		if slotId:find("TKB") and not slotId:find("Full") then
-			local arena = Arena3v3.new(gamemode)
-			arenas[arena.name] = arena
+			local arena = Arena3v3.new(gamemode, readLocation)
+			arenas[arena.name] = arena :: FollowArena
 		elseif slotId:find("Soccer") then
-			local arena = Driftblitz.new(gamemode)
-			arenas[arena.name] = arena
+			local arena = Driftblitz.new(gamemode, readLocation)
+			arenas[arena.name] = arena :: FollowArena
 		elseif slotId:find("Jakeball") then
-			local arena = Arena4v4.new(gamemode)
-			arenas[arena.name] = arena
+			local arena = Arena4v4.new(gamemode, readLocation)
+			arenas[arena.name] = arena :: FollowArena
 		end
 	end
 
@@ -1030,9 +673,9 @@ function getArenas(): { [any]: Arena }
 end
 
 -- arena
-local arenas: { [any]: Arena }
+local arenas: { [any]: FollowArena }
 
-local arena: Arena = nil
+local arena: FollowArena = nil
 
 -- camera
 local wasFollowed: boolean = false
@@ -1065,15 +708,12 @@ local handHeldRotationOffset: Quat = Quat.identity
 local gravityUpDirection: Vec3 = Vec3.zeroVector
 
 -- gui
-local readLocation = profile.readLocation -- 0: Live, 1 or above: Replay
 local listActive = false
 local currentPercentage = 0
 local savingNewProfile = false
 local deletingProfile = false
 local newProfileName = ""
 local confirmationText = ""
-local debugBallPrediction = false
-local lastDebugBallPredicion = false
 local playerNameInfo: string = ""
 local playerIdInfo: string = ""
 
@@ -1101,7 +741,8 @@ local forwardGestureModeLabel = "Forward Mode"
 local upGestureModeLabel = "Up Mode"
 local backwardsGestureModeLabel = "Backward Mode"
 local autoBallLabel = "Enabled"
-local autoBallThresholdLabel = "Toggle Speed (m/s)"
+local simResolutionLable = "Prediction Resolution Scale"
+local simTimeLengthLable = "Prediction Length Seconds"
 local ballCamGoalModeLabel = "Ball Goal Mode"
 local autoGoalCamLabel = "Enabled"
 local goalModeLabel = "Mode"
@@ -1192,6 +833,7 @@ local yMouse = Input.Key.MouseY
 
 -- Debug
 local debugFaceTheBall: boolean = false
+local followFreecam: boolean = false
 
 function updateVariables(profileName)
 	isSelfMuted = false
@@ -1209,16 +851,15 @@ function updateVariables(profileName)
 	autoGoalCam = profile.autoGoalCam
 	autoBall = profile.autoBall
 	targetPlayerName = profile.targetPlayerName
-	autoBallThreshold = profile.autoBallThreshold
 	ballGoalMode = profile.ballGoalMode
 	cameraEulerOffset = stringToVec3(profile.cameraEulerOffset)
 	cameraPositionOffset = stringToVec3(profile.cameraPositionOffset)
 
-	setTargetPlayer(getReplayFrameFromIndex(readLocation):getPlayerByName(targetPlayerName))
+	setTargetPlayer(Util.getReplayFrameFromIndex(readLocation):getPlayerByName(targetPlayerName))
 end
 
 function main()
-	arenaLoadTime = os.clock()
+	arenas = getArenas()
 end
 
 function onTransitionBegin()
@@ -1230,7 +871,7 @@ function onTransitionBegin()
 	WorldDraw.clear()
 
 	if not targetPlayer then
-		setTargetPlayer(getReplayFrameFromIndex(readLocation):getPlayerByName(targetPlayerName))
+		setTargetPlayer(Util.getReplayFrameFromIndex(readLocation):getPlayerByName(targetPlayerName))
 	end
 
 	if wasFollowed then
@@ -1240,76 +881,17 @@ function onTransitionBegin()
 		-- transition to orbit
 		local fromEuler = Quat.fromEuler(orbitRotation.x, orbitRotation.y, orbitRotation.z)
 		local direction = fromEuler:getForwardVector()
-		camera.position = orbitCenter + -direction * orbitRadius
+		camera.position = orbitCenter + Util.negateVec3(direction) * orbitRadius
 
 		camera:lookAt(orbitLookAt, Vec3.upVector)
 	end
 end
 
-function Multispacing(amount: number)
-	for i = 1, amount, 1 do
-		Gui.sameLine()
-		Gui.spacing()
-	end
-end
-
-function generateAsterisk(guiLabel: string, isEdited: boolean): string
+function generateAsterisk(guiLable: string, isEdited: boolean): string
 	if isEdited then
-		return `{guiLabel}(*)`
+		return `{guiLable}(*)###{guiLable}`
 	else
-		return guiLabel
-	end
-end
-
-function getKey(value, table): string
-	local key = ""
-	for k, v in pairs(table) do
-		if v == value then
-			key = k
-		end
-	end
-	return key
-end
-
--- clamps every axis in the vector to be between max and min
-function Vec3Clamp(vec: Vec3, min: number, max: number): Vec3
-	local axises = { x = vec.x, y = vec.y, z = vec.z }
-
-	for axis, value in pairs(axises) do
-		if value < min then
-			axises[axis] = min
-		elseif value > max then
-			axises[axis] = max
-		end
-	end
-
-	vec.x = axises.x
-	vec.y = axises.y
-	vec.z = axises.z
-
-	return vec
-end
-
-function Vec3ClampLength(vec: Vec3, maxLength: number): Vec3
-	if vec:length() > maxLength then
-		vec = vec:normalize() * maxLength
-	end
-
-	return vec
-end
-
-function QuatFromVec3(vec: Vec3): Quat
-	return Quat.fromEuler(vec.x, vec.y, vec.z)
-end
-
-function getReplayFrameFromIndex(replayIndex)
-	replayIndex = math.clamp(replayIndex, 0, #Replay.listLoaded())
-	local replay = Replay.getByIndex(replayIndex)
-	if replay then
-		return replay:getCurrentFrame(true)
-	else
-		-- 0 = live game
-		return getGameData()
+		return `{guiLable}###{guiLable}`
 	end
 end
 
@@ -1337,6 +919,7 @@ function setTargetPlayer(player: ReplayPlayer?)
 		camera:showQuestsForPlayerById(player.playerId, true)
 	end
 
+	setArena(getClosestArena(player.root.position))
 	targetPlayer = player
 	targetPlayerName = player.playerName
 end
@@ -1354,8 +937,10 @@ function clearTargetPlayer()
 	end
 end
 
-function setArena(_arena: Arena)
+function setArena(_arena: FollowArena)
 	arena = _arena
+	arena.frameIndex = readLocation
+	BallSim.arena = arena :: any
 end
 
 function onGui()
@@ -1379,10 +964,10 @@ function onGui()
 	end
 	Gui.setItemTooltip("Where the camera gets the game data from.")
 
-	local frame = getReplayFrameFromIndex(readLocation)
+	local frame = Util.getReplayFrameFromIndex(readLocation)
 
 	if Gui.beginCombo("Profile", lastUsedProfile) then
-		local defaultKey = getKey(config.profiles["default"], config.profiles)
+		local defaultKey = Util.getKey(config.profiles["default"], config.profiles)
 		if Gui.selectable("default", defaultKey == lastUsedProfile) then
 			lastUsedProfile = defaultKey
 			updateVariables(lastUsedProfile)
@@ -1408,32 +993,22 @@ function onGui()
 	end
 	Gui.setItemTooltip("The currently selected profile")
 
+	Emotes:selectEmoteGUI("Emote")
+
 	Gui.newLine()
 
-	showNameTags = Gui.checkbox(nametagsLabel, showNameTags)
-	if not Gui.isItemActive() then
-		nametagsLabel = generateAsterisk("Nametags", showNameTags ~= profile.showNameTags)
-	end
+	showNameTags = Gui.checkbox(generateAsterisk(nametagsLabel, showNameTags ~= profile.showNameTags), showNameTags)
 	Gui.setItemTooltip("Enable or disable nametags for all players")
 
 	Gui.sameLine()
-	showQuests = Gui.checkbox(showQuestsLabel, showQuests)
-	if not Gui.isItemActive() then
-		showQuestsLabel = generateAsterisk("Show Quests", showQuests ~= profile.showQuests)
-	end
+	showQuests = Gui.checkbox(generateAsterisk(showQuestsLabel, showQuests ~= profile.showQuests), showQuests)
 	Gui.setItemTooltip("Will show the quest for the followed player when they activate a quest")
 
-	muteSelf = Gui.checkbox(muteSelfLabel, muteSelf)
-	if not Gui.isItemActive() then
-		muteSelfLabel = generateAsterisk("Mute Self", muteSelf ~= profile.muteSelf)
-	end
+	muteSelf = Gui.checkbox(generateAsterisk(muteSelfLabel, muteSelf ~= profile.muteSelf), muteSelf)
 	Gui.setItemTooltip("Enable or disable muting yourself or the player you are currently following")
 
 	Gui.sameLine()
-	isLeftHanded = Gui.checkbox(isLeftHandedLabel, isLeftHanded)
-	if not Gui.isItemActive() then
-		isLeftHandedLabel = generateAsterisk("Left Handed", isLeftHanded ~= profile.isLeftHanded)
-	end
+	isLeftHanded = Gui.checkbox(generateAsterisk(isLeftHandedLabel, isLeftHanded ~= profile.isLeftHanded), isLeftHanded)
 	Gui.setItemTooltip("Makes you left handed | Used for Hand Held mode")
 
 	--[[focusedArena = Gui.checkbox(focusedArenaLabel, focusedArena)
@@ -1442,10 +1017,10 @@ function onGui()
 	end
 	Gui.setItemTooltip("Mutes all Players OUTSIDE of the Arena the Followed Player is currently in")]]
 
-	targetPlayerName = Gui.inputText(targetPlayerNameLabel, targetPlayerName)
-	if not Gui.isItemActive() then
-		targetPlayerNameLabel = generateAsterisk("Follow Player", targetPlayerName ~= profile.targetPlayerName)
-	end
+	targetPlayerName = Gui.inputText(
+		generateAsterisk(targetPlayerNameLabel, targetPlayerName ~= profile.targetPlayerName),
+		targetPlayerName
+	)
 	Gui.setItemTooltip("The player to follow")
 
 	if Gui.isItemActive() and #frame.players > 0 then
@@ -1484,7 +1059,7 @@ function onGui()
 		if Gui.button(Icon.Check) then
 			listActive = false
 		end
-		Multispacing(25)
+		Util.multispacing(25)
 		Gui.sameLine()
 		if Gui.button(Icon.Trash) then
 			clearTargetPlayer()
@@ -1493,22 +1068,17 @@ function onGui()
 
 		Gui.unindent()
 	end
-	local currentTime = os.clock()
-	if math.round(((currentTime - arenaLoadTime) / getArenaDelay) * 100) < 100 then
-		Gui.text(`Loading Arenas... ({math.round(((currentTime - arenaLoadTime) / getArenaDelay) * 100)}%)`)
-	end
 
-	cameraFOV = Gui.sliderInt(cameraFOVLabel, cameraFOV, 40, 179)
-	if not Gui.isItemActive() then
-		cameraFOVLabel = generateAsterisk("Field Of View", cameraFOV ~= profile.fieldOfView)
-	end
+	cameraFOV = Gui.sliderInt(generateAsterisk(cameraFOVLabel, cameraFOV ~= profile.fieldOfView), cameraFOV, 40, 179)
 	Gui.setItemTooltip("The cameras field of view (FOV)")
 	cameraFOV = math.clamp(cameraFOV, 40, 179)
 
-	positionSmoothing = Gui.sliderFloat(positionSmoothingLabel, positionSmoothing, 0, 1)
-	if not Gui.isItemActive() then
-		positionSmoothingLabel = generateAsterisk("Camera Smoothing", positionSmoothing ~= profile.positionSmoothing)
-	end
+	positionSmoothing = Gui.sliderFloat(
+		generateAsterisk(positionSmoothingLabel, positionSmoothing ~= profile.positionSmoothing),
+		positionSmoothing,
+		0,
+		1
+	)
 	positionSmoothing = math.clamp(positionSmoothing, 0, 1)
 	Gui.setItemTooltip("The time it takes for the Camera to move from A to B")
 	Gui.newLine()
@@ -1516,16 +1086,13 @@ function onGui()
 	Gui.indent()
 	Gui.separatorText("Settings")
 
-	if Gui.beginCombo(cameraModeLabel, cameraModes[cameraMode]) then
+	if Gui.beginCombo(generateAsterisk(cameraModeLabel, cameraMode ~= profile.cameraMode), cameraModes[cameraMode]) then
 		for i = 1, #cameraModes do
 			if Gui.selectable(cameraModes[i], i == cameraMode) then
 				cameraMode = i
 			end
 		end
 		Gui.endCombo()
-	end
-	if not Gui.isItemActive() then
-		cameraModeLabel = generateAsterisk("Camera Mode", cameraMode ~= profile.cameraMode)
 	end
 	cameraMode = math.clamp(cameraMode, 1, #cameraModes)
 	Gui.setItemTooltip("Changes how the Camera behaves")
@@ -1536,10 +1103,7 @@ function onGui()
 		Gui.beginDisabled()
 	end
 
-	radius = Gui.dragFloat(radiusLabel, radius, 0.5, 0, 100)
-	if not Gui.isItemActive() then
-		radiusLabel = generateAsterisk("Radius", radius ~= profile.radius)
-	end
+	radius = Gui.dragFloat(generateAsterisk(radiusLabel, radius ~= profile.radius), radius, 0.5, 0, 100)
 
 	if
 		Gui.isItemActivated()
@@ -1560,10 +1124,7 @@ function onGui()
 		Gui.beginDisabled()
 	end
 
-	threshold = Gui.sliderFloat(thresholdLabel, threshold, 0, radius)
-	if not Gui.isItemActive() then
-		thresholdLabel = generateAsterisk("Smart Switch Distance", threshold ~= profile.threshold)
-	end
+	threshold = Gui.sliderFloat(generateAsterisk(thresholdLabel, threshold ~= profile.threshold), threshold, 0, radius)
 	Gui.setItemTooltip(
 		"The distance at which the camera will automatically switch between 1st and 3rd Person (Only works when using Head Rotation)"
 	)
@@ -1582,22 +1143,24 @@ function onGui()
 		Gui.beginDisabled()
 	end
 
-	cameraPositionOffset = Gui.dragFloat3(cameraPositionOffsetLabel, cameraPositionOffset, 1, -1000, 1000)
-	if not Gui.isItemActive() then
-		cameraPositionOffsetLabel = generateAsterisk(
-			"Camera Position Offset",
-			cameraPositionOffset ~= stringToVec3(profile.cameraPositionOffset)
-		)
-	end
+	cameraPositionOffset = Gui.dragFloat3(
+		generateAsterisk(cameraPositionOffsetLabel, cameraPositionOffset ~= stringToVec3(profile.cameraPositionOffset)),
+		cameraPositionOffset,
+		1,
+		-1000,
+		1000
+	)
 
-	cameraPositionOffset = Vec3Clamp(cameraPositionOffset, -1000, 1000)
+	cameraPositionOffset = Util.vec3Clamp(cameraPositionOffset, -1000, 1000)
 	Gui.setItemTooltip("The Cameras positional offset. Only applied in mode 'Head Rotation' and 'First Person'")
 
-	cameraEulerOffset = Gui.dragFloat3(cameraEulerOffsetLabel, cameraEulerOffset, 1, -math.huge, math.huge)
-	if not Gui.isItemActive() then
-		cameraEulerOffsetLabel =
-			generateAsterisk("Camera Rotation Offset", cameraEulerOffset ~= stringToVec3(profile.cameraEulerOffset))
-	end
+	cameraEulerOffset = Gui.dragFloat3(
+		generateAsterisk(cameraEulerOffsetLabel, cameraEulerOffset ~= stringToVec3(profile.cameraEulerOffset)),
+		cameraEulerOffset,
+		1,
+		-math.huge,
+		math.huge
+	)
 	Gui.setItemTooltip("The Cameras rotational offset. Only applied in mode 'Head Rotation'")
 
 	if cameraMode == CameraMode.VelocityRotation or cameraMode == CameraMode.FaceTheBall then
@@ -1605,66 +1168,8 @@ function onGui()
 	end
 
 	Gui.newLine()
+
 	local gestureHeaderAsterisk = false
-	if Gui.collapsingHeader(gestureControlsHeaderLabel .. "###gesturecontrols") then
-		Gui.indent()
-		gestureControls = Gui.checkbox(gestureControlsLabel .. "##3", gestureControls)
-		if not Gui.isItemActive() then
-			gestureControlsLabel = generateAsterisk("Enabled", gestureControls ~= profile.gestureControls)
-		end
-		Gui.setItemTooltip([[
-Be able to grab the camera and throw it to change modes
-	- Grab the camera with grip and trigger behind your head
-	- Let go without throwing for First Person]])
-		if gestureControls then
-			if Gui.beginCombo(forwardGestureModeLabel, gestureModes[forwardGestureMode - 1]) then
-				for i = 1, #gestureModes do
-					if Gui.selectable(gestureModes[i], i == forwardGestureMode - 1) then
-						forwardGestureMode = i + 1
-					end
-				end
-				Gui.endCombo()
-			end
-			if not Gui.isItemActive() then
-				forwardGestureModeLabel =
-					generateAsterisk("Forward Mode", forwardGestureMode ~= profile.forwardGestureMode)
-			end
-			forwardGestureMode = math.clamp(forwardGestureMode, 1, #cameraModes)
-			Gui.setItemTooltip("What Mode to change to when Throwing the Camera forward")
-
-			if Gui.beginCombo(upGestureModeLabel, gestureModes[upGestureMode - 1]) then
-				for i = 1, #gestureModes do
-					if Gui.selectable(gestureModes[i], i == upGestureMode - 1) then
-						upGestureMode = i + 1
-					end
-				end
-				Gui.endCombo()
-			end
-			if not Gui.isItemActive() then
-				upGestureModeLabel = generateAsterisk("Up Mode", upGestureMode ~= profile.upGestureMode)
-			end
-			upGestureMode = math.clamp(upGestureMode, 1, #cameraModes)
-			Gui.setItemTooltip("What Mode to change to when Throwing the Camera up")
-
-			if Gui.beginCombo(backwardsGestureModeLabel, gestureModes[backwardsGestureMode - 1]) then
-				for i = 1, #gestureModes do
-					if Gui.selectable(gestureModes[i], i == backwardsGestureMode - 1) then
-						backwardsGestureMode = i + 1
-					end
-				end
-				Gui.endCombo()
-			end
-			if not Gui.isItemActive() then
-				backwardsGestureModeLabel =
-					generateAsterisk("Backward Mode", backwardsGestureMode ~= profile.backwardsGestureMode)
-			end
-			backwardsGestureMode = math.clamp(backwardsGestureMode, 1, #cameraModes)
-			Gui.setItemTooltip("What Mode to change to when Throwing the Camera backward")
-		end
-		Gui.unindent()
-	end
-
-	-- check for changes in the collapsing header
 	if
 		backwardsGestureMode ~= profile.backwardsGestureMode
 		or upGestureMode ~= profile.upGestureMode
@@ -1673,25 +1178,92 @@ Be able to grab the camera and throw it to change modes
 	then
 		gestureHeaderAsterisk = true
 	end
-	gestureControlsHeaderLabel = generateAsterisk("Gesture Controls", gestureHeaderAsterisk)
+	if Gui.collapsingHeader(generateAsterisk(gestureControlsHeaderLabel, gestureHeaderAsterisk)) then
+		Gui.indent()
+		gestureControls = Gui.checkbox(
+			generateAsterisk(gestureControlsLabel, gestureControls ~= profile.gestureControls) .. "##3",
+			gestureControls
+		)
+		Gui.setItemTooltip([[
+Be able to grab the camera and throw it to change modes
+	- Grab the camera with grip and trigger behind your head
+	- Let go without throwing for First Person]])
+		if gestureControls then
+			if
+				Gui.beginCombo(
+					generateAsterisk(forwardGestureModeLabel, forwardGestureMode ~= profile.forwardGestureMode),
+					gestureModes[forwardGestureMode - 1]
+				)
+			then
+				for i = 1, #gestureModes do
+					if Gui.selectable(gestureModes[i], i == forwardGestureMode - 1) then
+						forwardGestureMode = i + 1
+					end
+				end
+				Gui.endCombo()
+			end
+			forwardGestureMode = math.clamp(forwardGestureMode, 1, #cameraModes)
+			Gui.setItemTooltip("What Mode to change to when Throwing the Camera forward")
+
+			if
+				Gui.beginCombo(
+					generateAsterisk(upGestureModeLabel, upGestureMode ~= profile.upGestureMode),
+					gestureModes[upGestureMode - 1]
+				)
+			then
+				for i = 1, #gestureModes do
+					if Gui.selectable(gestureModes[i], i == upGestureMode - 1) then
+						upGestureMode = i + 1
+					end
+				end
+				Gui.endCombo()
+			end
+			upGestureMode = math.clamp(upGestureMode, 1, #cameraModes)
+			Gui.setItemTooltip("What Mode to change to when Throwing the Camera up")
+
+			if
+				Gui.beginCombo(
+					generateAsterisk(backwardsGestureModeLabel, backwardsGestureMode ~= profile.backwardsGestureMode),
+					gestureModes[backwardsGestureMode - 1]
+				)
+			then
+				for i = 1, #gestureModes do
+					if Gui.selectable(gestureModes[i], i == backwardsGestureMode - 1) then
+						backwardsGestureMode = i + 1
+					end
+				end
+				Gui.endCombo()
+			end
+			backwardsGestureMode = math.clamp(backwardsGestureMode, 1, #cameraModes)
+			Gui.setItemTooltip("What Mode to change to when Throwing the Camera backward")
+		end
+		Gui.unindent()
+	end
+
+	-- check for changes in the collapsing header
 
 	Gui.newLine()
 	Gui.separatorText("Auto Cameras")
 
 	local autoShootingCameraAsterisk = false
-	if Gui.collapsingHeader(autoShootingCameraHeaderLabel .. "###autoshootingcamera") then
+	if autoBall ~= profile.autoBall or ballGoalMode ~= profile.ballGoalMode then
+		autoShootingCameraAsterisk = true
+	end
+	if Gui.collapsingHeader(generateAsterisk(autoShootingCameraHeaderLabel, autoShootingCameraAsterisk)) then
 		Gui.indent()
 
-		autoBall = Gui.checkbox(autoBallLabel, autoBall)
-		if not Gui.isItemActive() then
-			autoBallLabel = generateAsterisk("Enabled", autoBall ~= profile.autoBall)
-		end
+		autoBall = Gui.checkbox(generateAsterisk(autoBallLabel, autoBall ~= profile.autoBall), autoBall)
 		Gui.setItemTooltip(
 			"The camera will start Orbiting the Ball for a shot capture when the it detects a possible Shot"
 		)
 
 		if autoBall then
-			if Gui.beginCombo(ballCamGoalModeLabel, ballGoalModes[ballGoalMode]) then
+			if
+				Gui.beginCombo(
+					generateAsterisk(ballCamGoalModeLabel, ballGoalMode ~= profile.ballGoalMode),
+					ballGoalModes[ballGoalMode]
+				)
+			then
 				for i = 1, #ballGoalModes do
 					if Gui.selectable(ballGoalModes[i], i == ballGoalMode) then
 						ballGoalMode = i
@@ -1699,47 +1271,44 @@ Be able to grab the camera and throw it to change modes
 				end
 				Gui.endCombo()
 			end
-			if not Gui.isItemActive() then
-				ballCamGoalModeLabel = generateAsterisk("Ball Goal Mode", ballGoalMode ~= profile.ballGoalMode)
-			end
 			Gui.setItemTooltip(
 				"If the ball camera should only activate when being shot on the enemy goal, or if it should activate on both goals"
 			)
 
-			autoBallThreshold = Gui.sliderInt(autoBallThresholdLabel, autoBallThreshold, 10, 15)
-			if not Gui.isItemActive() then
-				autoBallThresholdLabel =
-					generateAsterisk("Toggle Speed (m/s)", autoBallThreshold ~= profile.autoBallThreshold)
-			end
-			autoBallThreshold = math.clamp(autoBallThreshold, 10, 15)
-			Gui.setItemTooltip("The speed of the ball at which the camera switches to a shot capture.")
+			BallSim.pathLengthSeconds = Gui.sliderFloat(
+				generateAsterisk(simTimeLengthLable, BallSim.pathLengthSeconds ~= profile.simTimeLength),
+				BallSim.pathLengthSeconds,
+				0,
+				6
+			)
+			BallSim.pathLengthSeconds = math.clamp(BallSim.pathLengthSeconds, 0, 6)
+
+			BallSim.resolutionScale = Gui.sliderFloat(
+				generateAsterisk(simResolutionLable, BallSim.resolutionScale ~= profile.simResolutionScale),
+				BallSim.resolutionScale,
+				0.1,
+				1
+			)
+			BallSim.resolutionScale = math.clamp(BallSim.resolutionScale, 0.1, 1)
 		end
 		Gui.unindent()
 	end
 
-	if
-		autoBall ~= profile.autoBall
-		or ballGoalMode ~= profile.ballGoalMode
-		or autoBallThreshold ~= profile.autoBallThreshold
-	then
-		autoShootingCameraAsterisk = true
-	end
-	autoShootingCameraHeaderLabel = generateAsterisk("Auto Shooting Camera", autoShootingCameraAsterisk)
-
 	Gui.newLine()
 
 	local goalCameraAsterisk = false
-	if Gui.collapsingHeader(goalCameraHeaderLabel .. "###goalcamera") then
+	if autoGoalCam ~= profile.autoGoalCam or goalMode ~= profile.goalMode or distanceLerp ~= profile.distanceLerp then
+		goalCameraAsterisk = true
+	end
+	if Gui.collapsingHeader(generateAsterisk(goalCameraHeaderLabel, goalCameraAsterisk)) then
 		Gui.indent()
 
-		autoGoalCam = Gui.checkbox(autoGoalCamLabel .. "##2", autoGoalCam)
-		if not Gui.isItemActive() then
-			autoGoalCamLabel = generateAsterisk("Enabled", autoGoalCam ~= profile.autoGoalCam)
-		end
+		autoGoalCam =
+			Gui.checkbox(generateAsterisk(autoGoalCamLabel, autoGoalCam ~= profile.autoGoalCam) .. "##2", autoGoalCam)
 		Gui.setItemTooltip("Automatically positions the Camera inside the Goal when Targeted Player is close to Goal")
 
 		if autoGoalCam then
-			if Gui.beginCombo(goalModeLabel, goalModes[goalMode]) then
+			if Gui.beginCombo(generateAsterisk(goalModeLabel, goalMode ~= profile.goalMode), goalModes[goalMode]) then
 				for i = 1, #goalModes do
 					if Gui.selectable(goalModes[i], i == goalMode) then
 						goalMode = i
@@ -1747,25 +1316,19 @@ Be able to grab the camera and throw it to change modes
 				end
 				Gui.endCombo()
 			end
-			if not Gui.isItemActive() then
-				goalModeLabel = generateAsterisk("Mode", goalMode ~= profile.goalMode)
-			end
 			Gui.setItemTooltip("Determens which Goals to Activate at")
 
-			distanceLerp = Gui.sliderFloat(distanceLerpLabel, distanceLerp, 1, 10)
-			if not Gui.isItemActive() then
-				distanceLerpLabel = generateAsterisk("Player/Ball Ratio", distanceLerp ~= profile.distanceLerp)
-			end
+			distanceLerp = Gui.sliderFloat(
+				generateAsterisk(distanceLerpLabel, distanceLerp ~= profile.distanceLerp),
+				distanceLerp,
+				1,
+				10
+			)
 			Gui.setItemTooltip("The Look Ratio between the Player and the Ball. 0 is full Player, 10 is full Ball.")
 		end
 
 		Gui.unindent()
 	end
-
-	if autoGoalCam ~= profile.autoGoalCam or goalMode ~= profile.goalMode or distanceLerp ~= profile.distanceLerp then
-		goalCameraAsterisk = true
-	end
-	goalCameraHeaderLabel = generateAsterisk("Goal Camera", goalCameraAsterisk)
 
 	Gui.unindent()
 	Gui.newLine()
@@ -1808,7 +1371,8 @@ Be able to grab the camera and throw it to change modes
 					backwardsGestureMode = backwardsGestureMode,
 					readLocation = readLocation,
 					autoBall = autoBall,
-					autoBallThreshold = autoBallThreshold,
+					simResolution = BallSim.resolutionScale,
+					simTimeLength = BallSim.pathLengthSeconds,
 					ballGoalMode = ballGoalMode,
 					cameraEulerOffset = tostring(cameraEulerOffset),
 					cameraPositionOffset = tostring(cameraPositionOffset),
@@ -1877,7 +1441,8 @@ Be able to grab the camera and throw it to change modes
 				backwardsGestureMode = backwardsGestureMode,
 				readLocation = readLocation,
 				autoBall = autoBall,
-				autoBallThreshold = autoBallThreshold,
+				simResolution = BallSim.resolutionScale,
+				simTimeLength = BallSim.pathLengthSeconds,
 				ballGoalMode = ballGoalMode,
 				cameraEulerOffset = tostring(cameraEulerOffset),
 				cameraPositionOffset = tostring(cameraPositionOffset),
@@ -1905,13 +1470,31 @@ Be able to grab the camera and throw it to change modes
 	if Gui.treeNode("Debug") then
 		Gui.indent()
 		Gui.separatorText("Debug Settings")
-		debugBallPrediction = Gui.checkbox("Debug Ball Prediction", debugBallPrediction)
-		GravityScale = Gui.dragInt("Gravity", GravityScale, 1, -1000, 0)
-		drag = Gui.sliderFloat("Drag", drag, 0, 10)
+		BallSim.debug = Gui.checkbox("Debug Ball Prediction", BallSim.debug)
+		BallSim.gravityScale = Gui.sliderFloat("Gravity", BallSim.gravityScale, 0, 1)
+		BallSim.drag = Gui.sliderFloat("Drag", BallSim.drag, 0, 1)
 
 		Gui.newLine()
 
 		debugFaceTheBall = Gui.checkbox("Debug Face The Ball", debugFaceTheBall)
+
+		Gui.newLine()
+
+		if followFreecam and Gui.button("stop follow freecam") then
+			followFreecam = false
+			camera:followCamera(nil)
+		end
+		if not followFreecam and Gui.button("follow freecam") then
+			followFreecam = true
+			sendMessage(getCameraById("anotheraxiom.freecam"), {
+				messageType = "setTransform",
+				rotation = camera.rotation,
+				position = camera.position,
+				fieldOfView = camera.fieldOfView,
+			})
+			camera:followCamera(getCameraById("anotheraxiom.freecam"))
+		end
+
 		Gui.unindent()
 		Gui.indent()
 		Gui.separatorText("Info")
@@ -1940,7 +1523,7 @@ Be able to grab the camera and throw it to change modes
 			Gui.text("Ball Arena: " .. tostring(ballArena))
 			Gui.treePop()
 		end
-		if Gui.treeNode("Arena") then
+		if arena and Gui.treeNode("Arena") then
 			Gui.text("Arena Name: " .. arena.name)
 			Gui.text("Arena Position: " .. tostring(arena.transform.position))
 			Gui.text("Arena Rotation: " .. tostring(arena.transform.rotation:euler()))
@@ -1949,7 +1532,7 @@ Be able to grab the camera and throw it to change modes
 		if Gui.treeNode("Other") then
 			Gui.text("Temporary Radius: " .. tostring(localRadius))
 			Gui.text("Distance: " .. tostring(distance))
-			Gui.text("Ball Distance: " .. tostring(getDist(headPosition, ballPosition)))
+			Gui.text("Ball Distance: " .. tostring(Util.getDist(headPosition, ballPosition)))
 			Gui.treePop()
 		end
 
@@ -1972,40 +1555,11 @@ function toggleSmoothing(position: boolean, rotation: boolean)
 	end
 end
 
-function isBetweenVector(n: Vec3, min: Vec3, max: Vec3, up: Vec3): boolean
-	local nHeight = n:dot(up)
-	local minHeight = min:dot(up)
-	local maxHeight = max:dot(up)
-
-	return nHeight >= minHeight and nHeight <= maxHeight
-end
-
-function isBetween(n: number, min: number, max: number): boolean
-	if n > min and n < max then
-		return true
-	else
-		return false
-	end
-end
-
-function getForward(positionA: Vec3, positionB: Vec3): Vec3
-	local forward: Vec3 = Vec3.new((positionB.x - positionA.x), (positionB.y - positionA.y), positionB.z - positionA.z)
-		:normalize()
-	return forward
-end
-
 function updateRay(startPosition: Vec3, endPosition: Vec3): RayHit
-	local forward: Vec3 = getForward(endPosition, startPosition)
+	local forward: Vec3 = Util.getForward(endPosition, startPosition)
 	local backwards: Vec3 = Vec3.new(-forward.x, -forward.y, -forward.z)
 	local hit: RayHit = camera:castRay(startPosition, endPosition + (backwards * 10))
 	return hit
-end
-
-function getDist(point1: Vec3, point2: Vec3): number
-	local x: number = math.abs(point1.x - point2.x) ^ 2
-	local y: number = math.abs(point1.y - point2.y) ^ 2
-	local z: number = (point1.z - point2.z) ^ 2
-	return math.sqrt(x + y + z)
 end
 
 function decodePoseBits(poseBits)
@@ -2018,11 +1572,13 @@ function decodePoseBits(poseBits)
 	}
 end
 
-function getClosestArena(targetPosition: Vec3): Arena -- Remove this function when/if we get the arena from the player
+function getClosestArena(
+	targetPosition: Vec3
+): FollowArena -- Remove this function when/if we get the arena from the player
 	local closestArenaDistance = math.huge
 	local closestArena = nil
-	for _, arena: Arena in pairs(arenas) do
-		local distance = getDist(targetPosition, arena.transform.position)
+	for _, arena: FollowArena in pairs(arenas) do
+		local distance = Util.getDist(targetPosition, arena.transform.position)
 		-- because some arenas are directly above others
 		-- we limit the arenas to those where the player is between the arenas floor and roof position
 		if not arena.box:checkPointIntersect(targetPosition) then
@@ -2036,8 +1592,8 @@ function getClosestArena(targetPosition: Vec3): Arena -- Remove this function wh
 
 	-- if the camera is placed in such a way that it is not leveled with any arena we loop again without limiting height
 	if closestArena == nil then
-		for _, arena: Arena in pairs(arenas) do
-			local distance = getDist(targetPosition, arena.transform.position)
+		for _, arena: FollowArena in pairs(arenas) do
+			local distance = Util.getDist(targetPosition, arena.transform.position)
 			if distance < closestArenaDistance then
 				closestArenaDistance = distance
 				closestArena = arena
@@ -2048,32 +1604,13 @@ function getClosestArena(targetPosition: Vec3): Arena -- Remove this function wh
 	return closestArena
 end
 
-function getClosestArenaBall(targetPosition: Vec3, frameData: ReplayFrame)
-	local balls = frameData.balls
-	local closestBallDistance = math.huge
-	local clostestBall: ReplayBall = nil
-	for i in balls do
-		local ball = balls[i]
-
-		if not arena.box:checkPointIntersect(ball.transform.position) then
-			continue
-		end
-		local distance = getDist(targetPosition, ball.transform.position)
-		if distance < closestBallDistance and parseBallJSON(ball:toJson()).type ~= 2 then
-			closestBallDistance = distance
-			clostestBall = ball
-		end
-	end
-	return clostestBall
-end
-
 function getClosestBall(targetPosition: Vec3, frameData: ReplayFrame)
 	local balls = frameData.balls
 	local closestBallDistance = math.huge
 	local clostestBall: ReplayBall = nil
 	for i in balls do
 		local ball = balls[i]
-		local distance = getDist(targetPosition, ball.transform.position)
+		local distance = Util.getDist(targetPosition, ball.transform.position)
 		if distance < closestBallDistance then
 			closestBallDistance = distance
 			clostestBall = ball
@@ -2083,7 +1620,7 @@ function getClosestBall(targetPosition: Vec3, frameData: ReplayFrame)
 end
 
 function registeredHit(position: Vec3, rotation: Quat, hitPosition: Vec3, smartSwitch: boolean): number?
-	local distance = getDist(position, hitPosition) / 10
+	local distance = Util.getDist(position, hitPosition) / 10
 	if distance < threshold and smartSwitch then
 		firstPerson(position, nil, rotation)
 		return
@@ -2107,9 +1644,9 @@ function registeredOffsetHit(position: Vec3, offset: Vec3): Vec3
 	local hit = camera:castRay(startPosition, endPosition)
 
 	if hit.successful then
-		local distance = startPosition - hit.position - (getForward(startPosition, endPosition) * -20)
+		local distance = startPosition - hit.position - (Util.getForward(startPosition, endPosition) * -20)
 
-		offset = Vec3ClampLength(offset, distance:length())
+		offset = Util.clampMagnitude3(offset, distance:length())
 	end
 
 	return offset
@@ -2140,7 +1677,7 @@ function rotationPivotPosition(position: Vec3, rotation: Quat, radius: number): 
 	radius *= 10
 	local cameraDirection = rotationQuat:getForwardVector()
 
-	pivotPosition = position + -cameraDirection * radius
+	pivotPosition = position + Util.negateVec3(cameraDirection) * radius
 
 	return pivotPosition
 end
@@ -2151,7 +1688,7 @@ function velocityPivotPosition(position: Vec3, velocity: Vec3, radius: number, b
 
 	local cameraDirection = velocity:getSafeNormal()
 	if not ball then
-		cameraDirection = -cameraDirection
+		cameraDirection = Util.negateVec3(cameraDirection)
 	end
 
 	velocityPivot = position + cameraDirection * radius
@@ -2161,10 +1698,10 @@ end
 
 function twoPointPivotPosition(point1: Vec3, point2: Vec3, radius: number): Vec3
 	local pivotPosition = Vec3.zeroVector
-	local direction = getForward(point1, point2)
+	local direction = Util.getForward(point1, point2)
 	direction.z = math.clamp(direction.z, -0.8, 0.8)
 	radius *= 10
-	pivotPosition = point1 + -direction * radius
+	pivotPosition = point1 + Util.negateVec3(direction) * radius
 
 	return pivotPosition
 end
@@ -2172,16 +1709,16 @@ end
 function faceTheBallPivotPosition(position: Vec3, playerBox: BoxType, ballPosition: Vec3, radius: number): Vec3
 	local faceTheBallPosition = Vec3.zeroVector
 
-	local closestPointToBall = playerBox:getClosestPoint(ballPosition, false)
+	local closestPointToBall = playerBox:clampPointToBox(ballPosition, false)
 
-	local direction = getForward(closestPointToBall, ballPosition)
+	local direction = Util.getForward(closestPointToBall, ballPosition)
 	radius *= 10
 
 	if debugFaceTheBall then
 		WorldDraw.drawLine(closestPointToBall, closestPointToBall + (direction * 50), 0, 1, 0, 10, 0)
 	end
 
-	faceTheBallPosition = position + -direction * radius
+	faceTheBallPosition = position + Util.negateVec3(direction) * radius
 
 	return faceTheBallPosition
 end
@@ -2195,14 +1732,14 @@ end
 
 function teamLists(frame: ReplayFrame)
 	local tempTeamList: { ReplayPlayer } = {}
-	if teamIndex == TeamIndex.NoTeam then
+	if teamIndex == Util.TeamIndex.NoTeam then
 		lastTeammatesList = teammatesList
 		teammatesList = {}
 		return
 	end
 
 	for _, player in frame.players do
-		if player.teamIndex == TeamIndex.NoTeam then
+		if player.teamIndex == Util.TeamIndex.NoTeam then
 			continue
 		end
 		local closestArena = getClosestArena(player.root.position)
@@ -2232,8 +1769,8 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 		and leftPoseFlags.FullHandPoseOverride ~= HandPose.GrabBall
 	then
 		if
-			(cameraMode == CameraMode.HandHeld and isLeftHanded and not wasInGoal and not cameraInGoal)
-			or player.head.rotation:getForwardVector():dot(getForward(player.head.position, leftHandPosition))
+			(cameraMode == CameraMode.HandHeld and isLeftHanded and not isFollowingBall and not cameraInGoal)
+			or player.head.rotation:getForwardVector():dot(Util.getForward(player.head.position, leftHandPosition))
 				< -0.2
 		then
 			grabTimers.left += deltaTime
@@ -2270,7 +1807,7 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 			local leftHandTransform = Transform.identity
 			leftHandTransform.position = Vec3.lerp(
 				leftHandPosition,
-				leftHandPosition + Vec3ClampLength((throwVelocity * throwBoost), 500),
+				leftHandPosition + Util.clampMagnitude3((throwVelocity * throwBoost), 500),
 				releaseTimers.left / maxLetGoTime
 			)
 			if throwVelocity ~= Vec3.zeroVector then
@@ -2294,8 +1831,8 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 		and rightPoseFlags.FullHandPoseOverride ~= HandPose.GrabBall
 	then
 		if
-			(cameraMode == CameraMode.HandHeld and not isLeftHanded and not wasInGoal and not cameraInGoal)
-			or player.head.rotation:getForwardVector():dot(getForward(player.head.position, rightHandPosition))
+			(cameraMode == CameraMode.HandHeld and not isLeftHanded and not isFollowingBall and not cameraInGoal)
+			or player.head.rotation:getForwardVector():dot(Util.getForward(player.head.position, rightHandPosition))
 				< -0.2
 		then
 			grabTimers.right += deltaTime
@@ -2332,12 +1869,13 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 			end
 			rightHandTransform.position = Vec3.lerp(
 				rightHandPosition,
-				rightHandPosition + Vec3ClampLength((throwVelocity * throwBoost), 500),
+				rightHandPosition + Util.clampMagnitude3((throwVelocity * throwBoost), 500),
 				releaseTimers.right / maxLetGoTime
 			)
 			if throwVelocity ~= Vec3.zeroVector then
 				local forwardLook = throwVelocity:normalize()
-				rightHandTransform.rotation = Quat.fromXZ(-forwardLook, player.head.rotation:getUpVector())
+				rightHandTransform.rotation =
+					Quat.fromXZ(Util.negateVec3(forwardLook), player.head.rotation:getUpVector())
 			else
 				local rightHandRotation: Quat = player.root.rotation * player.rightHand.rotation
 				rightHandTransform.rotation = rightHandRotation
@@ -2367,10 +1905,12 @@ function grabbingCamera(player: ReplayPlayer, grabHand: Transform)
 	end
 
 	if (throwVelocity:length() * 100) < 2.5 then
-		local headDistance = getDist(camera.position, player.head.position)
-		local leftHandDistance =
-			getDist(camera.position, player.root.position + player.root.rotation:rotateVector(player.leftHand.position))
-		local rightHandDistance = getDist(
+		local headDistance = Util.getDist(camera.position, player.head.position)
+		local leftHandDistance = Util.getDist(
+			camera.position,
+			player.root.position + player.root.rotation:rotateVector(player.leftHand.position)
+		)
+		local rightHandDistance = Util.getDist(
 			camera.position,
 			player.root.position + player.root.rotation:rotateVector(player.rightHand.position)
 		)
@@ -2398,7 +1938,7 @@ function grabbingCamera(player: ReplayPlayer, grabHand: Transform)
 
 	local playerForward = player.root.rotation:getForwardVector()
 	local playerUp = player.root.rotation:getUpVector()
-	local playerBackwards = -playerForward
+	local playerBackwards = Util.negateVec3(playerForward)
 
 	local forwardDot = playerForward:dot(throwVelocity:normalize())
 	local upDot = playerUp:dot(throwVelocity:normalize())
@@ -2426,177 +1966,6 @@ function grabbingCamera(player: ReplayPlayer, grabHand: Transform)
 		cameraMode = CameraMode.FaceTheBall
 	elseif biggestDotName == "backwards" then
 		cameraMode = CameraMode.HeadRotation
-	end
-end
-
-function calculateAcceleration(currentVelocity: Vec3, dt: number)
-	local dragForce = currentVelocity * -drag
-	local dragLoss = dragForce / 0.21
-	local gravityAcceleration = Vec3.new(0, 0, GravityScale)
-
-	local acceleration = dragLoss + gravityAcceleration
-	return acceleration
-end
-function NextVelocity(currentVelocity: Vec3, acceleration: Vec3, dt): Vec3
-	local realDrag = drag * dt
-	local calculatedNextVelocity = currentVelocity + acceleration * dt
-	local linDamping = calculatedNextVelocity * -realDrag
-	linDamping.z = 0
-	calculatedNextVelocity += linDamping
-	return calculatedNextVelocity
-end
-
-function NextPosition(position: Vec3, velocity: Vec3, acceleration: Vec3, dt: number)
-	local accelerationTerm = acceleration * (0.5 * (dt * dt))
-	return position + velocity * dt + accelerationTerm
-end
-
--- Function to calculate the velocity after a bounce
-function calculateBounce(velocity: Vec3, surfaceNormal: Vec3)
-	-- Reflect the velocity vector based on the surface normal
-	local dotProduct: number = velocity:dot(surfaceNormal)
-
-	local reflectedVelocity = velocity - (surfaceNormal * (2 * dotProduct))
-
-	if math.abs(reflectedVelocity.z) < 50 then
-		reflectedVelocity.z = 0
-	else
-		reflectedVelocity = reflectedVelocity * dampingFactor
-	end
-
-	return reflectedVelocity
-end
-
-function applyRollingFriction(velocity: Vec3)
-	if velocity.z == 0 then
-		-- Apply friction to the horizontal components (x and y)
-		velocity.x = velocity.x * rollingFriction
-		velocity.y = velocity.y * rollingFriction
-	end
-
-	return velocity
-end
-
-function calculatePrediction(dt: number)
-	acceleration = calculateAcceleration(nowVelocity, dt)
-	nextVelocity = NextVelocity(nowVelocity, acceleration, dt)
-	nextPosition = NextPosition(nowPosition, nextVelocity, acceleration, dt)
-
-	local hit: RayHit = camera:castRay(nowPosition, nextPosition)
-
-	if hit.successful then
-		local ballRadiusOffset = hit.normal * 40
-
-		-- draw normals
-		if debugBallPrediction then
-			WorldDraw.drawLine(
-				hit.position + ballRadiusOffset,
-				hit.position + ballRadiusOffset + (hit.normal * 100),
-				1,
-				0,
-				0,
-				10,
-				0
-			)
-		end
-
-		nextPosition = hit.position + ballRadiusOffset
-
-		nextVelocity = calculateBounce(nextVelocity, hit.normal)
-	end
-end
-
-function isInGoal(): boolean
-	local homeBox: BoxType = arena.home.goal.box
-	local awayBox: BoxType = arena.away.goal.box
-
-	if debugBallPrediction then
-		homeBox:render(1, 0, 0)
-		awayBox:render(0, 0, 1)
-	end
-
-	if homeBox:checkPointIntersect(ballPosition) or awayBox:checkPointIntersect(ballPosition) then
-		return false
-	end
-
-	if homeBox:checkPointIntersect(nowPosition) then
-		if
-			ballGoalMode == BallGoalMode.BothGoals
-			or teamIndex == TeamIndex.AwayTeam and ballGoalMode == BallGoalMode.EnemyGoal
-		then
-			return true
-		end
-	end
-
-	if awayBox:checkPointIntersect(nowPosition) then
-		if
-			ballGoalMode == BallGoalMode.BothGoals
-			or teamIndex == TeamIndex.HomeTeam and ballGoalMode == BallGoalMode.EnemyGoal
-		then
-			return true
-		end
-	end
-
-	return false
-end
-
-function predictBall()
-	local dt = 0.1
-
-	if debugBallPrediction or lastDebugBallPredicion then
-		WorldDraw.clear()
-	end
-	lastDebugBallPredicion = debugBallPrediction
-
-	nowPosition = ballPosition
-	nowVelocity = ballVelocity
-
-	acceleration = calculateAcceleration(nowVelocity, dt)
-
-	local wasInGoalThisLoop = false
-
-	if isInGoal() then
-		wasInGoalThisLoop = true
-		timeOutOfGoal = 0
-	end
-
-	calculatePrediction(dt)
-
-	if debugBallPrediction then
-		--WorldDraw.drawPoint(nextPosition, 1, 0, 0, 50, 0)
-		WorldDraw.drawLine(ballPosition, nextPosition, 1, 0, 0, 10, 0)
-	end
-
-	for i = 1, 50, 1 do
-		nowPosition = nextPosition
-		nowVelocity = nextVelocity
-
-		if isInGoal() then
-			wasInGoalThisLoop = true
-			timeOutOfGoal = 0
-		end
-
-		calculatePrediction(dt)
-
-		if debugBallPrediction and true then
-			--WorldDraw.drawPoint(nextPosition, 0, 1, 0, 50, 0)
-			WorldDraw.drawLine(nowPosition, nextPosition, 0, 1, 0, 10, 0)
-		end
-	end
-
-	if wasInGoalThisLoop then
-		timeInGoal += deltaTime
-	else
-		timeOutOfGoal += deltaTime
-	end
-
-	if timeInGoal >= maxTimeInGoal then
-		wasInGoal = true
-	end
-
-	if timeOutOfGoal >= maxTimeOutOfGoal then
-		timeInGoal = 0
-		wasInGoal = false
 	end
 end
 
@@ -2646,7 +2015,7 @@ function firstPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat)
 		position += offsetForMicFix
 	end
 
-	local offsetDistance = getDist(headPosition, position)
+	local offsetDistance = Util.getDist(headPosition, position)
 	if offsetDistance >= 50 then
 		camera.hideNearestHead = false
 	else
@@ -2748,7 +2117,6 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 		Box.new(player.root.position + verticalOffset + horizontalOffset, Vec3.new(5, 50, 100), playerChestRotation)
 
 	if debugFaceTheBall then
-		WorldDraw.clear()
 		playerBox:render(0.7, 0.15, 0.15)
 	end
 
@@ -2793,14 +2161,14 @@ function checkFlip(rightHandTransform: Transform, rightHandPosebits, leftHandTra
 
 	if isLeftHanded then
 		local handForward = leftHandTransform.rotation:getForwardVector()
-		local otherHandDirection = getForward(leftHandTransform.position, rightHandTransform.position)
-		local handDistance = getDist(leftHandTransform.position, rightHandTransform.position)
+		local otherHandDirection = Util.getForward(leftHandTransform.position, rightHandTransform.position)
+		local handDistance = Util.getDist(leftHandTransform.position, rightHandTransform.position)
 
 		if
 			rightHandPose.GripDown
 			and rightHandPose.TriggerDown
 			and rightHandVelocity:length() >= 1
-			and otherHandDirection:dot(-handForward) > 0.75
+			and otherHandDirection:dot(Util.negateVec3(handForward)) > 0.75
 			and handDistance <= 30
 		then
 			if rightDot > 0.8 or rightDot < -0.8 then
@@ -2811,14 +2179,14 @@ function checkFlip(rightHandTransform: Transform, rightHandPosebits, leftHandTra
 		end
 	else
 		local handForward = rightHandTransform.rotation:getForwardVector()
-		local otherHandDirection = getForward(rightHandTransform.position, leftHandTransform.position)
-		local handDistance = getDist(leftHandTransform.position, rightHandTransform.position)
+		local otherHandDirection = Util.getForward(rightHandTransform.position, leftHandTransform.position)
+		local handDistance = Util.getDist(leftHandTransform.position, rightHandTransform.position)
 
 		if
 			leftHandPose.GripDown
 			and leftHandPose.TriggerDown
 			and leftHandVelocity:length() >= 1
-			and otherHandDirection:dot(-handForward) > 0.75
+			and otherHandDirection:dot(Util.negateVec3(handForward)) > 0.75
 			and handDistance <= 30
 		then
 			if leftDot > 0.8 or leftDot < -0.8 then
@@ -2863,6 +2231,48 @@ function handHeld(player: ReplayPlayer)
 	previousRightHandPosition = rightHandPosition
 end
 
+function checkForBallFollow(player: ReplayPlayer)
+	BallSim:tick()
+	local isInGoalInfo = BallSim:isInGoal()
+
+	if isFollowingBall then
+		local hasScored = arena.home.goal.box:checkPointIntersect(arena.ball.transform.position)
+			or arena.away.goal.box:checkPointIntersect(arena.ball.transform.position)
+		local isHeld = Util.isBallHeld(arena.ball, BallSim.radius, arena.players)
+		local notInGoal = not isInGoalInfo.home and not isInGoalInfo.away
+		local stopFollow = (notInGoal or hasScored or isHeld) and os.clock() > followBallStart + minBallFollowTime
+
+		if stopFollow then
+			isFollowingBall = false
+			return
+		end
+	end
+
+	if not isInGoalInfo.home and not isInGoalInfo.away then
+		return
+	end
+
+	local shotGoal = nil
+	if isInGoalInfo.home then
+		shotGoal = arena.home.goal
+	else
+		shotGoal = arena.away.goal
+	end
+
+	local oppositeGoal = (isInGoalInfo.home and player.teamIndex == Util.TeamIndex.AwayTeam)
+		or (isInGoalInfo.away and player.teamIndex == Util.TeamIndex.HomeTeam)
+	local isCorrectGoal = (
+		(ballGoalMode == BallGoalMode.EnemyGoal and oppositeGoal) or (ballGoalMode == BallGoalMode.BothGoals)
+	)
+	local isGoodShotDistance = Util.getDist(shotGoal.position, arena.ball.transform.position) > 1000
+	local isInAir = not Util.isBallHeld(arena.ball, BallSim.radius, arena.players)
+	local isGoal = (isInGoalInfo.home or isInGoalInfo.away) and isCorrectGoal and isGoodShotDistance and isInAir
+
+	if isGoal then
+		isFollowingBall = true
+	end
+end
+
 function withPlayer(player: ReplayPlayer)
 	camera.showNameTags = showNameTags
 
@@ -2876,7 +2286,7 @@ function withPlayer(player: ReplayPlayer)
 		end
 	end
 
-	if autoGoalCam and not (ballTarget and wasInGoal) then
+	if autoGoalCam and not isFollowingBall then
 		if arena:checkGoalCam(player) then
 			return
 		end
@@ -2893,35 +2303,13 @@ function withPlayer(player: ReplayPlayer)
 	end
 
 	if autoBall then
-		if
-			ballVelocity:length() > 100 * autoBallThreshold
-			and not ballTarget
-			and player.teamIndex ~= TeamIndex.NoTeam
-		then
-			ballTarget = true
+		checkForBallFollow(player)
+		if isFollowingBall then
+			ballCam(30, Quat.identity)
+			return
 		end
-
-		if ballVelocity:length() < 500 and ballTarget or player.teamIndex == TeamIndex.NoTeam then
-			timeInGoal = 0
-			ballTarget = false
-			wasInGoal = false
-		end
-
-		ballTarget = true
-
-		if ballTarget then
-			predictBall()
-
-			if wasInGoal then
-				if not doneOnceBall then
-					instaRotateBall = true
-				end
-				ballCam(30, Quat.identity)
-				return
-			end
-		end
-	else
-		ballTarget = false
+	elseif isFollowingBall then
+		isFollowingBall = false
 	end
 
 	if doneOnceBall then
@@ -2940,13 +2328,13 @@ function withPlayer(player: ReplayPlayer)
 
 	camera.fieldOfView = cameraFOV
 	if radius == 0 and cameraMode ~= CameraMode.HandHeld then
-		firstPerson(headPosition, cameraPositionOffset, headRotation * QuatFromVec3(cameraEulerOffset))
+		firstPerson(headPosition, cameraPositionOffset, headRotation * Util.quatFromVec3(cameraEulerOffset))
 	elseif cameraMode == CameraMode.HeadRotation then
 		thirdPerson(headPosition, cameraPositionOffset, headRotation, true)
 	elseif cameraMode == CameraMode.VelocityRotation then
 		thirdPersonVelocity(headPosition, player.velocity, headRotation)
 	elseif cameraMode == CameraMode.FaceTheBall then
-		if player.teamIndex ~= TeamIndex.NoTeam then
+		if player.teamIndex ~= Util.TeamIndex.NoTeam then
 			thirdPersonFacingBall(player, Vec3.zeroVector)
 		else
 			thirdPerson(headPosition, cameraPositionOffset, headRotation, false)
@@ -2954,7 +2342,7 @@ function withPlayer(player: ReplayPlayer)
 	elseif cameraMode == CameraMode.HandHeld then
 		handHeld(player)
 	else
-		firstPerson(headPosition, cameraPositionOffset, headRotation * QuatFromVec3(cameraEulerOffset))
+		firstPerson(headPosition, cameraPositionOffset, headRotation * Util.quatFromVec3(cameraEulerOffset))
 	end
 end
 
@@ -2962,7 +2350,7 @@ function noPlayerOrbit(dt: number)
 	local fromEuler = Quat.fromEuler(orbitRotation.x, orbitRotation.y, orbitRotation.z)
 	local direction = fromEuler:getForwardVector()
 
-	camera.position = orbitCenter + -direction * orbitRadius
+	camera.position = orbitCenter + Util.negateVec3(direction) * orbitRadius
 	gravityUpDirection = gravity.upDirection
 
 	camera:lookAtBasic(Vec3.zeroVector)
@@ -3023,7 +2411,7 @@ function configureVOIP()
 		end
 	end
 
-	if focusedArena and teamIndex ~= TeamIndex.NoTeam and #lastServerPlayerList > 0 then
+	if focusedArena and teamIndex ~= Util.TeamIndex.NoTeam and #lastServerPlayerList > 0 then
 		for _, currentPlayer in frame.players do
 			local tryFindPlayer = table.find(lastServerPlayerList, currentPlayer.playerId)
 
@@ -3082,8 +2470,20 @@ function tick(dt)
 		return
 	end
 
+	WorldDraw.clear()
+
 	deltaTime = dt
-	frame = getReplayFrameFromIndex(readLocation)
+	frame = Util.getReplayFrameFromIndex(readLocation)
+
+	Emotes:tick()
+
+	if cachedGamemodeAmount ~= #SpectatorGamemodes.listGamemodeIds() then
+		arenas = getArenas()
+		if Util.getDictSize(arenas) > 0 then
+			setArena(Util.getDictIndex(arenas, 1))
+		end
+		cachedGamemodeAmount = #SpectatorGamemodes.listGamemodeIds()
+	end
 
 	if #frame.players == 0 or not targetPlayer then
 		noPlayerOrbit(dt)
@@ -3091,24 +2491,18 @@ function tick(dt)
 	end
 
 	if arena == nil then
-		local currentTime = os.clock()
-		if currentTime >= arenaLoadTime + getArenaDelay then
-			arenas = getArenas()
-			if getDictSize(arenas) > 0 then
-				setArena(getDictIndex(arenas, 1))
-			end
-		end
 		noPlayerOrbit(dt)
 		return
 	end
 
 	updatePlayerData(targetPlayer, frame)
+	arena:tick()
 
 	local ball = nil
-	if targetPlayer.teamIndex == TeamIndex.NoTeam then
+	if targetPlayer.teamIndex == Util.TeamIndex.NoTeam then
 		ball = getClosestBall(targetPlayer.root.position, frame)
 	else
-		ball = getClosestArenaBall(arena.transform.position, frame)
+		ball = arena.ball
 	end
 
 	gravityUpDirection = targetPlayer.root.rotation:getUpVector()
@@ -3153,7 +2547,6 @@ type MessageValues = {
 	upGestureMode: number?,
 	backwardsGestureMode: number?,
 	autoBall: boolean?,
-	autoBallThreshold: number?,
 	autoGoalCam: boolean?,
 	ballGoalMode: number?,
 	goalMode: number?,
@@ -3204,7 +2597,7 @@ function onMessageReceived(messageTable: MessageValues)
 	-- targetPlayerName is a string used for getting the player you want to follow. if this is empty or unable to find the name typed in it follows noone.
 	if messageTable.targetPlayerName then
 		targetPlayerName = messageTable.targetPlayerName
-		setTargetPlayer(getReplayFrameFromIndex(readLocation):getPlayerByName(messageTable.targetPlayerName))
+		setTargetPlayer(Util.getReplayFrameFromIndex(readLocation):getPlayerByName(messageTable.targetPlayerName))
 	end
 	-- cameraFOV is a number that sets the camera FOV, the number can be set between 40 and 179
 	if messageTable.cameraFOV then
@@ -3269,10 +2662,6 @@ function onMessageReceived(messageTable: MessageValues)
 	-- autoBall is a boolean that determens wether the auto shooting camera is enabled or not. You are still able to change values assotiated with the auto shooting camera even if the auto shooting camera is disabled.
 	if messageTable.autoBall ~= nil then
 		autoBall = messageTable.autoBall
-	end
-	-- autoBallThreshold is a number that determens when the auto shooting camera should activate based on the currently tracked balls speed in m/s. Value can be set between 10 and 20.
-	if messageTable.autoBallThreshold then
-		autoBallThreshold = messageTable.autoBallThreshold
 	end
 	-- ballGoalMode is a number that determens whether the auto shooting camera should activate based on what goal is being shot at. (1 = Enemy Goal, 2 = Both Goals)
 	if messageTable.ballGoalMode then
