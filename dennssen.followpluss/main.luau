@@ -462,9 +462,11 @@ Arena4v4.goalBoxSize = Vec3.new(200, 450, 225)
 Arena4v4.goalPositionOffset = Vec3.new(4075, 0, 175)
 
 function Arena4v4.new(gamemode: ModuleStateSpectatorLuaApi): FollowArena
-	local self: FollowArena = setmetatable(FollowArena.new(gamemode, readLocation), Arena4v4) :: any
+	local self: FollowArena = setmetatable(Arena.new(gamemode, readLocation), Arena4v4) :: any
 	self.type = "4v4"
-	self.name = `Jakeball {self.slotId:sub(self.slotId:len() - 2)}`
+	local nameEnd = self.slotId:find("_") :: number
+	self.name = `{self.slotId:sub(1, nameEnd - 1)} {self.slotId:sub(self.slotId:len() - 2)}`
+
 	self:setupDimensions()
 	return self :: Arena4v4
 end
@@ -651,14 +653,14 @@ function getArenas(): { [any]: FollowArena }
 	for _, gamemode in gamemodes do
 		local slotId = gamemode:getSlotId()
 		if slotId:find("TKB") and not slotId:find("Full") then
-			local arena = Arena3v3.new(gamemode, readLocation)
-			arenas[arena.name] = arena :: FollowArena
+			local arena: FollowArena = Arena3v3.new(gamemode, readLocation) :: Arena3v3
+			arenas[arena.name] = arena
 		elseif slotId:find("Soccer") then
-			local arena = Driftblitz.new(gamemode, readLocation)
-			arenas[arena.name] = arena :: FollowArena
-		elseif slotId:find("Jakeball") then
-			local arena = Arena4v4.new(gamemode, readLocation)
-			arenas[arena.name] = arena :: FollowArena
+			local arena: FollowArena = Driftblitz.new(gamemode, readLocation) :: Driftblitz
+			arenas[arena.name] = arena
+		elseif slotId:find("Jakeball") or slotId:find("Driftball") then
+			local arena: FollowArena = Arena4v4.new(gamemode, readLocation) :: Arena4v4
+			arenas[arena.name] = arena
 		end
 	end
 
