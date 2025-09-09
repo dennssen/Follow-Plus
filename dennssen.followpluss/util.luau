@@ -8,6 +8,12 @@ Util.TeamIndex = {
 	AwayTeam = 1,
 }
 
+function Util.safeSendMessage(camera: SpectatorCamera, message: any)
+	if camera then
+		sendMessage(camera, message)
+	end
+end
+
 function Util.getDist(point1: Vec3, point2: Vec3): number
 	local x: number = math.abs(point1.x - point2.x) ^ 2
 	local y: number = math.abs(point1.y - point2.y) ^ 2
@@ -35,6 +41,10 @@ function Util.getBallType(json: string): number
 	else
 		return 0
 	end
+end
+
+function Util.linearColorToVec3(color: LinearColor): Vec3
+	return Vec3.new(color.R, color.G, color.B)
 end
 
 function Util.extractPrimaryPlayerColor(playerJson: string): { r: number, g: number, b: number }
@@ -82,6 +92,16 @@ function Util.getDictIndex(dict, index: number)
 	end
 
 	return dictItem
+end
+
+function Util.getDictKey(value, table): string
+	local key = ""
+	for k, v in pairs(table) do
+		if v == value then
+			key = k
+		end
+	end
+	return key
 end
 
 function Util.deepStructureCopy(structureTable, normalTable): boolean
@@ -139,16 +159,20 @@ function Util.initializeConfig(defaultConfig: { [any]: any })
 	end
 end
 
-function Util.isBetweenVector(n: Vec3, min: Vec3, max: Vec3, up: Vec3): boolean
-	local nHeight = n:dot(up)
-	local minHeight = min:dot(up)
-	local maxHeight = max:dot(up)
+function Util.stringToVec3(string: string): Vec3
+	local x, y, z = string.match(string, "%{ ([%d.-]+), ([%d.-]+), ([%d.-]+) %}")
+	if not x or not y or not z then
+		return Vec3.zeroVector
+	end
 
-	return nHeight >= minHeight and nHeight <= maxHeight
-end
+	local nx, ny, nz = tonumber(x), tonumber(y), tonumber(z)
 
-function Util.isBetweenVec2(v1: Vec2, v2: Vec2, point: Vec2)
-	return v1.x < point.x and v2.x > point.x and v1.y < point.y and v2.y > point.y
+	if not nx or not ny or not nz then
+		return Vec3.zeroVector
+	end
+
+	local vec = Vec3.new(nx, ny, nz)
+	return vec
 end
 
 function Util.isBetween(n: number, min: number, max: number): boolean
@@ -157,12 +181,6 @@ function Util.isBetween(n: number, min: number, max: number): boolean
 	else
 		return false
 	end
-end
-
-function Util.getForward(positionA: Vec3, positionB: Vec3): Vec3
-	local forward: Vec3 = Vec3.new((positionB.x - positionA.x), (positionB.y - positionA.y), positionB.z - positionA.z)
-		:normalize()
-	return forward
 end
 
 function Util.findPlayerInTable(table: { ReplayPlayer }, player: ReplayPlayer): number?
@@ -190,8 +208,9 @@ function Util.getClosestBall(targetPosition: Vec3, frameData: ReplayFrame): Repl
 	return clostestBall
 end
 
-function Util.isBallHeld(ball: ReplayBall, ballRadius: number, players: { ReplayPlayer }): boolean
+function Util.isBallHeld(ball: ReplayBall, ballRadius: number, players: { ReplayPlayer }): ReplayPlayer?
 	local closestPlayerDistance = math.huge
+	local closestPlayer: ReplayPlayer = nil
 
 	for _, player in players do
 		local root = player.root
@@ -207,10 +226,41 @@ function Util.isBallHeld(ball: ReplayBall, ballRadius: number, players: { Replay
 
 		if minimumDistance < closestPlayerDistance then
 			closestPlayerDistance = minimumDistance
+			closestPlayer = player
 		end
 	end
 
-	return closestPlayerDistance < ballRadius + 10
+	if closestPlayerDistance < ballRadius + 10 then
+		return closestPlayer
+	else
+		return nil
+	end
+end
+
+function Util.getClosestPlayerToBall(ball: ReplayBall, players: { ReplayPlayer }): ReplayPlayer
+	local closestPlayerDistance = math.huge
+	local closestPlayer: ReplayPlayer = nil
+
+	for _, player in players do
+		local root = player.root
+		local headPosition = player.head.position
+		local leftHandPosition = root.rotation:rotateVector(player.leftHand.position) + root.position
+		local rightHandPosition = root.rotation:rotateVector(player.rightHand.position) + root.position
+
+		local rootDistance = Util.getDist(ball.transform.position, root.position)
+		local headDistance = Util.getDist(ball.transform.position, headPosition)
+		local leftHandDistance = Util.getDist(ball.transform.position, leftHandPosition)
+		local rightHandDistance = Util.getDist(ball.transform.position, rightHandPosition)
+
+		local minimumDistance = math.min(rootDistance, headDistance, leftHandDistance, rightHandDistance)
+
+		if minimumDistance < closestPlayerDistance then
+			closestPlayerDistance = minimumDistance
+			closestPlayer = player
+		end
+	end
+
+	return closestPlayer
 end
 
 function Util.debugPrint(s: any)
@@ -243,6 +293,11 @@ function Util.negateVec3(vec: Vec3): Vec3 -- annoying error workaround
 	return vec
 end
 
+function Util.getForward(positionA: Vec3, positionB: Vec3): Vec3
+	local forward: Vec3 = (positionB - positionA):normalize()
+	return forward
+end
+
 -- clamps every axis in the vector to be between max and min
 function Util.vec3Clamp(vec: Vec3, min: number, max: number): Vec3
 	local axises = { x = vec.x, y = vec.y, z = vec.z }
@@ -262,16 +317,80 @@ function Util.vec3Clamp(vec: Vec3, min: number, max: number): Vec3
 	return vec
 end
 
-function Util.clampMagnitude3(vec: Vec3, maxLength: number): Vec3
-	if vec:length() > maxLength then
-		vec = vec:normalize() * maxLength
+function Util.clampMagnitude3(vec: Vec3, maxMagnitude: number): Vec3
+	if vec:length() > maxMagnitude then
+		return vec:normalize() * maxMagnitude
+	else
+		return vec
 	end
+end
 
-	return vec
+function Util.angleBetweenVec3s(a: Vec3, b: Vec3, axis: Vec3): number
+	a = a:normalize()
+	b = b:normalize()
+	axis = axis:normalize()
+
+	local dot = math.max(-1, math.min(1, a:dot(b)))
+	local unsignedAngle = math.acos(dot)
+
+	local cross = a:cross(b)
+
+	local sign = cross:dot(axis)
+
+	if sign >= 0 then
+		return unsignedAngle
+	else
+		return -unsignedAngle
+	end
+end
+
+function Util.isBetweenVector(n: Vec3, min: Vec3, max: Vec3, up: Vec3): boolean
+	local nHeight = n:dot(up)
+	local minHeight = min:dot(up)
+	local maxHeight = max:dot(up)
+
+	return nHeight >= minHeight and nHeight <= maxHeight
+end
+
+function Util.clampMagnitude2(vec: Vec2, maxMagnitude: number): Vec2
+	if vec:length() > maxMagnitude then
+		return vec:normalize() * maxMagnitude
+	else
+		return vec
+	end
+end
+
+function Util.rotateVec2(vec: Vec2, rads: number): Vec2
+	return Vec2.new(
+		(vec.x * math.cos(rads)) + (vec.y * math.sin(rads)),
+		(-vec.x * math.sin(rads)) + (vec.y * math.cos(rads))
+	)
+end
+
+function Util.isBetweenVec2(v1: Vec2, v2: Vec2, point: Vec2)
+	return v1.x < point.x and v2.x > point.x and v1.y < point.y and v2.y > point.y
 end
 
 function Util.quatFromVec3(vec: Vec3): Quat
 	return Quat.fromEuler(vec.x, vec.y, vec.z)
+end
+
+function Util.QuatToAngleAxis(quat: Quat): { angle: number, axis: Vec3 }
+	local angle = 2 * math.acos(quat.w)
+
+	if angle == 0 or angle == 180 then
+		return { angle = angle, axis = Vec3.upVector }
+	end
+
+	local axis = Vec3.new(quat.x / math.sin(angle / 2), quat.y / math.sin(angle / 2), quat.z / math.sin(angle / 2))
+
+	return { angle = angle, axis = axis }
+end
+
+function Util.lookAt(cameraPosition: Vec3, point: Vec3, up: Vec3)
+	up = up:normalize()
+	local forward = Util.getForward(cameraPosition, point)
+	return Quat.fromXZ(forward, up)
 end
 
 function Util.dateTimeDeltaSeconds(past: DateTime, future: DateTime): number
