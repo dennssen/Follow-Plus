@@ -2,9 +2,6 @@
 local _version: string = "1.9.0"
 
 -- TODO:
--- Finish smoothing system
--- Fix emotes
--- Rewrite collision system
 -- Record Match Replays
 
 -- dependecies
@@ -31,6 +28,7 @@ type FollowArena = Arena<{}, GoalCamData, GoalCamData> & {
 local BallSim = require("ballsim")
 
 local frame: ReplayFrame
+local hasTickedOnce: boolean = false
 
 local CameraMode = {
 	FirstPerson = 1,
@@ -699,6 +697,16 @@ end
 -- arena
 local arenas: { [any]: FollowArena }
 
+function tryGetArenas()
+	if cachedGamemodeAmount ~= #SpectatorGamemodes.listGamemodeIds() then
+		arenas = getArenas()
+		if Util.getDictSize(arenas) > 0 then
+			setArena(Util.getDictIndex(arenas, 1))
+		end
+		cachedGamemodeAmount = #SpectatorGamemodes.listGamemodeIds()
+	end
+end
+
 local arena: FollowArena = nil
 
 -- camera
@@ -963,6 +971,9 @@ function clearTargetPlayer()
 end
 
 function setArena(_arena: FollowArena)
+	if not _arena then
+		return
+	end
 	arena = _arena
 	arena.frameIndex = readLocation
 	BallSim.arena = arena :: any
@@ -2366,6 +2377,10 @@ function rotateCamera()
 end
 
 function tick(dt)
+	if not hasTickedOnce then
+		hasTickedOnce = true
+	end
+
 	if not camera.isActive and not camera.isFollowed then
 		alwaysTick = false
 		onExit()
@@ -2381,13 +2396,7 @@ function tick(dt)
 
 	Emotes:tick()
 
-	if cachedGamemodeAmount ~= #SpectatorGamemodes.listGamemodeIds() then
-		arenas = getArenas()
-		if Util.getDictSize(arenas) > 0 then
-			setArena(Util.getDictIndex(arenas, 1))
-		end
-		cachedGamemodeAmount = #SpectatorGamemodes.listGamemodeIds()
-	end
+	tryGetArenas()
 
 	if #frame.players == 0 or not targetPlayer then
 		noPlayerOrbit(dt)
@@ -2464,6 +2473,10 @@ function onMessageReceived(messageTable: MessageValues)
 	-- only accept tables
 	if type(messageTable) ~= "table" then
 		return
+	end
+
+	if not hasTickedOnce then
+		tick(0)
 	end
 
 	-- I set wasFollowed to true if a message was recieved to make sure the variables get reset once the camera is used standalone again
