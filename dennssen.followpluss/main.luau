@@ -727,6 +727,7 @@ local cameraModes = { "First Person", "Head Rotation", "Velocity Rotation", "Fac
 local gestureModes = { "Head Rotation", "Velocity Rotation", "Face the Ball" }
 
 local cameraTransition: boolean = false
+local THIRD_PERSON_OFFSET: Vec3 = Vec3.new(0, 0, 50)
 local cameraEulerOffset: Vec3 = stringToVec3(profile.cameraEulerOffset)
 local cameraPositionOffset: Vec3 = Vec3.zeroVector
 local distance = 0
@@ -2016,12 +2017,15 @@ function thirdPersonVelocity(position: Vec3, velocity: Vec3, rotation: Quat)
 		toggleSmoothing(true, true)
 	end
 
+	local offsetPosition: Vec3 = rotation:rotateVector(THIRD_PERSON_OFFSET)
+
 	if velocity:length() < 600 then
-		thirdPerson(position, nil, rotation, true)
+		thirdPerson(position, offsetPosition + cameraPositionOffset, rotation, true)
 		return
 	end
 
-	velocityPivotPosition(position, velocity, radius, false)
+	position += offsetPosition
+
 	setCameraRotation(Util.lookAt(cameraPosition, position, gravityUpDirection))
 	hidePlayerHead = false
 	velocityPivotPosition(position, velocity, radius, false)
@@ -2032,7 +2036,7 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 		toggleSmoothing(true, true)
 	end
 
-	local offset = player.head.rotation:rotateVector(Vec3.new(0, 0, 50))
+	local offset = player.head.rotation:rotateVector(offsetPosition)
 	local position = player.head.position + offset
 
 	local horizontalVelocity = player.velocity - player.velocity:projectOnTo(gravity.upDirection)
@@ -2060,10 +2064,6 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 
 	if debugFaceTheBall then
 		playerBox:render(0.7, 0.15, 0.15)
-	end
-
-	if offsetPosition then
-		position += offsetPosition
 	end
 
 	setCameraRotation(Util.lookAt(cameraPosition, position, gravityUpDirection))
@@ -2263,14 +2263,14 @@ function withPlayer(player: ReplayPlayer)
 	if radius == 0 and cameraMode ~= CameraMode.HandHeld then
 		firstPerson()
 	elseif cameraMode == CameraMode.HeadRotation then
-		thirdPerson(headPosition, cameraPositionOffset, headRotation, true)
+		thirdPerson(headPosition, THIRD_PERSON_OFFSET + cameraPositionOffset, headRotation, true)
 	elseif cameraMode == CameraMode.VelocityRotation then
 		thirdPersonVelocity(headPosition, player.velocity, headRotation)
 	elseif cameraMode == CameraMode.FaceTheBall then
 		if player.teamIndex ~= Util.TeamIndex.NoTeam then
-			thirdPersonFacingBall(player, Vec3.zeroVector)
+			thirdPersonFacingBall(player, THIRD_PERSON_OFFSET)
 		else
-			thirdPerson(headPosition, cameraPositionOffset, headRotation, false)
+			thirdPerson(headPosition, THIRD_PERSON_OFFSET + cameraPositionOffset, headRotation, false)
 		end
 	elseif cameraMode == CameraMode.HandHeld then
 		handHeld(player)
