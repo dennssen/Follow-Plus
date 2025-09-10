@@ -38,6 +38,7 @@ local CameraMode = {
 	HandHeld = 5,
 }
 
+local collisions: boolean = true
 local cameraAnchor: Vec3 = Vec3.zeroVector
 local cameraOffset: Vec3 = Vec3.zeroVector
 local targetCameraOffset: Vec3 = Vec3.zeroVector
@@ -57,7 +58,6 @@ end
 
 function setCameraRotation(rotation: Quat)
 	cameraRotation = rotation
-	rotateCamera()
 end
 
 --(A2.Vector){ 0.000000, 0.000000, -180.000000 }
@@ -408,7 +408,6 @@ function Arena3v3:goalCam(goalPosition: Vec3, goalRotation: Quat)
 		toggleSmoothing(false, true)
 	end
 
-	setCameraPosition(goalPosition, Vec3.zeroVector)
 	camera.fieldOfView = goalCamFOV
 
 	local rotation = goalRotation
@@ -442,6 +441,7 @@ function Arena3v3:goalCam(goalPosition: Vec3, goalRotation: Quat)
 	end
 
 	setCameraRotation(rotation)
+	setCameraPosition(goalPosition, Vec3.zeroVector)
 end
 
 function Arena3v3:GUIChangeDimensions()
@@ -783,6 +783,7 @@ local distanceLerpLabel = "Player/Ball Ratio"
 local targetPlayer: ReplayPlayer? = nil
 local targetPlayerName = profile.targetPlayerName
 local previousTargetPlayerId = -1
+local hidePlayerHead: boolean = false
 local headPosition: Vec3 = Vec3.new(0, 0, 0)
 local headRotation: Quat = Quat.identity
 local playerVelocity = Vec3.zeroVector
@@ -914,9 +915,8 @@ function onTransitionBegin()
 		-- transition to orbit
 		local fromEuler = Quat.fromEuler(orbitRotation.x, orbitRotation.y, orbitRotation.z)
 		local direction = fromEuler:getForwardVector()
-		setCameraPosition(orbitCenter, Util.negateVec3(direction) * orbitRadius)
-
 		setCameraRotation(Util.lookAt(cameraPosition, orbitLookAt, Vec3.upVector))
+		setCameraPosition(orbitCenter, Util.negateVec3(direction) * orbitRadius)
 	end
 end
 
@@ -1609,6 +1609,7 @@ function getClosestArena(
 ): FollowArena -- Remove this function when/if we get the arena from the player
 	local closestArenaDistance = math.huge
 	local closestArena = nil
+
 	for _, arena: FollowArena in pairs(arenas) do
 		local distance = Util.getDist(targetPosition, arena.transform.position)
 		-- because some arenas are directly above others
@@ -1847,7 +1848,7 @@ end
 
 function grabbingCamera(player: ReplayPlayer, grabHand: Transform)
 	toggleSmoothing(true, true)
-	camera.hideNearestHead = false
+	hidePlayerHead = false
 
 	setCameraPosition(grabHand.position, Vec3.zeroVector)
 
@@ -1933,35 +1934,61 @@ function ballCam(radius: number, rotation: Quat)
 		radius = 10
 	end
 
-	velocityPivotPosition(ballPosition, ballVelocity, radius, false)
-	camera.hideNearestHead = false
 	setCameraRotation(Util.lookAt(cameraPosition, ballPosition, gravityUpDirection))
+	hidePlayerHead = false
+	velocityPivotPosition(ballPosition, ballVelocity, radius, false)
 end
 
-function firstPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat)
+function firstPerson()
 	if not cameraTransition then
 		toggleSmoothing(false, true)
 	end
 
-	if offsetPosition ~= nil then
-		offsetPosition = rotation:rotateVector(offsetPosition)
-		position += offsetPosition
-	end
+	local position = headPosition
+	local offsetPosition = cameraPositionOffset
+	local rotation = headRotation * Util.quatFromVec3(cameraEulerOffset)
 
-	if offsetPosition == nil or offsetPosition == Vec3.zeroVector then
+	offsetPosition = rotation:rotateVector(offsetPosition)
+	position += offsetPosition
+
+	if offsetPosition == Vec3.zeroVector then
 		local offsetForMicFix = rotation:rotateVector(Vec3.new(0.01, 0, 0))
 		position += offsetForMicFix
 	end
 
 	local offsetDistance = Util.getDist(headPosition, position)
 	if offsetDistance >= 50 then
-		camera.hideNearestHead = false
+		hidePlayerHead = false
 	else
-		camera.hideNearestHead = true
+		hidePlayerHead = true
 	end
 
-	setCameraPosition(position, Vec3.zeroVector)
 	setCameraRotation(rotation)
+	setCameraPosition(position, Vec3.zeroVector)
+end
+
+function firstPersonOverride()
+	local position = headPosition
+	local offsetPosition = cameraPositionOffset
+	local rotation = headRotation * Util.quatFromVec3(cameraEulerOffset)
+
+	offsetPosition = rotation:rotateVector(offsetPosition)
+	position += offsetPosition
+
+	if offsetPosition == Vec3.zeroVector then
+		local offsetForMicFix = rotation:rotateVector(Vec3.new(0.01, 0, 0))
+		position += offsetForMicFix
+	end
+
+	local offsetDistance = Util.getDist(headPosition, position)
+	if offsetDistance >= 50 then
+		hidePlayerHead = false
+	else
+		hidePlayerHead = true
+	end
+
+	setCameraRotation(rotation)
+	cameraPosition = position
 end
 
 function thirdPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat, smartSwitch: boolean)
@@ -1979,9 +2006,9 @@ function thirdPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat, smar
 		mouseRotationOffset()
 	end
 
-	rotationPivotPosition(position, rotation, radius)
-	camera.hideNearestHead = false
 	setCameraRotation(Util.lookAt(cameraPosition, position, gravityUpDirection))
+	hidePlayerHead = false
+	rotationPivotPosition(position, rotation, radius)
 end
 
 function thirdPersonVelocity(position: Vec3, velocity: Vec3, rotation: Quat)
@@ -1995,8 +2022,9 @@ function thirdPersonVelocity(position: Vec3, velocity: Vec3, rotation: Quat)
 	end
 
 	velocityPivotPosition(position, velocity, radius, false)
-	camera.hideNearestHead = false
 	setCameraRotation(Util.lookAt(cameraPosition, position, gravityUpDirection))
+	hidePlayerHead = false
+	velocityPivotPosition(position, velocity, radius, false)
 end
 
 function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
@@ -2038,9 +2066,9 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 		position += offsetPosition
 	end
 
-	faceTheBallPivotPosition(position, playerBox, ballPosition, radius)
-	camera.hideNearestHead = false
 	setCameraRotation(Util.lookAt(cameraPosition, position, gravityUpDirection))
+	hidePlayerHead = false
+	faceTheBallPivotPosition(position, playerBox, ballPosition, radius)
 end
 
 function checkFlip(rightHandTransform: Transform, rightHandPosebits, leftHandTransform: Transform, leftHandPosebits)
@@ -2121,11 +2149,11 @@ function handHeld(player: ReplayPlayer)
 
 	-- check if leftHanded
 	if isLeftHanded then
-		setCameraPosition(leftHandPosition, leftHandRotation:rotateVector(positionOffset))
 		setCameraRotation(leftHandRotation * handHeldRotationOffset)
+		setCameraPosition(leftHandPosition, leftHandRotation:rotateVector(positionOffset))
 	else
-		setCameraPosition(rightHandPosition, rightHandRotation:rotateVector(positionOffset))
 		setCameraRotation(rightHandRotation * handHeldRotationOffset)
+		setCameraPosition(rightHandPosition, rightHandRotation:rotateVector(positionOffset))
 	end
 
 	previousLeftHandPosition = leftHandPosition
@@ -2176,6 +2204,10 @@ end
 
 function withPlayer(player: ReplayPlayer)
 	camera.showNameTags = showNameTags
+
+	if not collisions then
+		collisions = true
+	end
 
 	-- check for gesture controls
 	if gestureControls then
@@ -2229,7 +2261,7 @@ function withPlayer(player: ReplayPlayer)
 
 	camera.fieldOfView = cameraFOV
 	if radius == 0 and cameraMode ~= CameraMode.HandHeld then
-		firstPerson(headPosition, cameraPositionOffset, headRotation * Util.quatFromVec3(cameraEulerOffset))
+		firstPerson()
 	elseif cameraMode == CameraMode.HeadRotation then
 		thirdPerson(headPosition, cameraPositionOffset, headRotation, true)
 	elseif cameraMode == CameraMode.VelocityRotation then
@@ -2243,19 +2275,24 @@ function withPlayer(player: ReplayPlayer)
 	elseif cameraMode == CameraMode.HandHeld then
 		handHeld(player)
 	else
-		firstPerson(headPosition, cameraPositionOffset, headRotation * Util.quatFromVec3(cameraEulerOffset))
+		firstPerson()
 	end
 end
 
 function noPlayerOrbit(dt: number)
+	if collisions then
+		collisions = false
+	end
 	local fromEuler = Quat.fromEuler(orbitRotation.x, orbitRotation.y, orbitRotation.z)
 	local direction = fromEuler:getForwardVector()
+
+	setCameraRotation(Util.lookAt(cameraPosition, Vec3.zeroVector, Vec3.upVector))
+	orbitRotation.z -= dt * orbitRotationSpeed
 
 	setCameraPosition(orbitCenter, Util.negateVec3(direction) * orbitRadius)
 	gravityUpDirection = gravity.upDirection
 
-	setCameraRotation(Util.lookAt(cameraPosition, Vec3.zeroVector, Vec3.upVector))
-	orbitRotation.z -= dt * orbitRotationSpeed
+	rotateCamera()
 end
 
 function configureVOIP()
@@ -2367,6 +2404,24 @@ end
 function moveCamera()
 	cameraOffset = Vec3.lerp(cameraOffset, targetCameraOffset, deltaTime / (cameraPositionSmoothing + deltaTime))
 	cameraPosition = cameraAnchor + cameraOffset
+
+	-- Collision
+	if collisions then
+		local cameraForwards = Util.getForward(cameraAnchor, cameraPosition)
+		local rayEnd: Vec3 = cameraPosition + (cameraForwards * 10)
+		local hit: RayHit = camera:castRay(cameraAnchor, rayEnd)
+		if hit.successful then
+			local hitDistance: number = Util.getDist(rayEnd, hit.position)
+			local radiusCm = radius * 10
+			local thresholdCm = threshold * 10
+			if radiusCm - hitDistance < thresholdCm then
+				firstPersonOverride()
+			else
+				cameraPosition += Util.negateVec3(cameraForwards) * hitDistance
+			end
+		end
+	end
+
 	camera.position = cameraPosition
 end
 
@@ -2424,6 +2479,10 @@ function tick(dt)
 	configureVOIP()
 	previousCameraMode = cameraMode
 	previousTargetPlayerId = targetPlayer.playerId
+
+	camera.hideNearestHead = hidePlayerHead
+
+	rotateCamera()
 end
 
 function onExit()
@@ -2603,6 +2662,7 @@ function onMessageReceived(messageTable: MessageValues)
 		goalMode = messageTable.goalMode
 	end
 	if messageTable.hideNearestHead ~= nil then
-		camera.hideNearestHead = messageTable.hideNearestHead
+		hidePlayerHead = messageTable.hideNearestHead
+		camera.hideNearestHead = hidePlayerHead
 	end
 end
