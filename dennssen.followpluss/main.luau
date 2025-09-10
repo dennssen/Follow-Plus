@@ -1004,7 +1004,7 @@ function onGui()
 	local frame = Util.getReplayFrameFromIndex(readLocation)
 
 	if Gui.beginCombo("Profile", lastUsedProfile) then
-		local defaultKey = Util.getKey(config.profiles["default"], config.profiles)
+		local defaultKey = Util.getDictKey(config.profiles["default"], config.profiles)
 		if Gui.selectable("default", defaultKey == lastUsedProfile) then
 			lastUsedProfile = defaultKey
 			updateVariables(lastUsedProfile)
@@ -1188,7 +1188,7 @@ function onGui()
 		1000
 	)
 
-	cameraPositionOffset = Util.vec3Clamp(cameraPositionOffset, -1000, 1000)
+	cameraPositionOffset = Util.vec3ClampAxis(cameraPositionOffset, -1000, 1000)
 	Gui.setItemTooltip("The Cameras positional offset. Only applied in mode 'Head Rotation' and 'First Person'")
 
 	cameraEulerOffset = Gui.dragFloat3(
@@ -1761,7 +1761,7 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 			local leftHandTransform = Transform.identity
 			leftHandTransform.position = Vec3.lerp(
 				leftHandPosition,
-				leftHandPosition + Util.clampMagnitude3((throwVelocity * throwBoost), 500),
+				leftHandPosition + Util.clampLength3((throwVelocity * throwBoost), 0, 500),
 				releaseTimers.left / maxLetGoTime
 			)
 			if throwVelocity ~= Vec3.zeroVector then
@@ -1823,7 +1823,7 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 			end
 			rightHandTransform.position = Vec3.lerp(
 				rightHandPosition,
-				rightHandPosition + Util.clampMagnitude3((throwVelocity * throwBoost), 500),
+				rightHandPosition + Util.clampLength3((throwVelocity * throwBoost), 0, 500),
 				releaseTimers.right / maxLetGoTime
 			)
 			if throwVelocity ~= Vec3.zeroVector then
