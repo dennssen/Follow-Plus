@@ -2,25 +2,39 @@
 
 local Util = {}
 
+--- TeamIndex constants
+--- @param NoTeam -- player with no team
+--- @param HomeTeam -- player on home team
+--- @param AwayTeam -- player on away team
 Util.TeamIndex = {
 	NoTeam = -1,
 	HomeTeam = 0,
 	AwayTeam = 1,
 }
 
+--- Sends the `message` if the `camera` exists
+--- @param camera -- the SpectatorCamera to message
+--- @param message -- the message to send to the camera
 function Util.safeSendMessage(camera: SpectatorCamera, message: any)
 	if camera then
 		sendMessage(camera, message)
 	end
 end
 
-function Util.getDist(point1: Vec3, point2: Vec3): number
-	local x: number = math.abs(point1.x - point2.x) ^ 2
-	local y: number = math.abs(point1.y - point2.y) ^ 2
-	local z: number = (point1.z - point2.z) ^ 2
+--- Get the distance between 2 points
+--- @param a -- the first point
+--- @param b -- then second point
+--- @return the distance between `a` and `b` in centimeters
+function Util.getDist(a: Vec3, b: Vec3): number
+	local x: number = math.abs(a.x - b.x) ^ 2
+	local y: number = math.abs(a.y - b.y) ^ 2
+	local z: number = (a.z - b.z) ^ 2
 	return math.sqrt(x + y + z)
 end
 
+--- Get the `ReplayFrame` using a `number`
+--- @param index the replay index
+--- @return replay number `index`'s replay frame | 0 returns live frame
 function Util.getReplayFrameFromIndex(index: number): ReplayFrame
 	index = math.clamp(index, 0, #Replay.listLoaded())
 	local replay = Replay.getByIndex(index)
@@ -32,6 +46,9 @@ function Util.getReplayFrameFromIndex(index: number): ReplayFrame
 	end
 end
 
+--- Gets the `ReplayBall` type using it's JSON data
+--- @param json the `ReplayBall`'s JSON
+--- @return the type of the `ReplayBall` as a number. A type of 2 is a HeartBall
 function Util.getBallType(json: string): number
 	local typeVal = string.match(json, '"type"%s*:%s*([%d]+)')
 	local ballType: number? = tonumber(typeVal)
@@ -43,10 +60,14 @@ function Util.getBallType(json: string): number
 	end
 end
 
+--- Converts `LinearColor` to `Vec3` | **This will remove the Alpha value**
 function Util.linearColorToVec3(color: LinearColor): Vec3
 	return Vec3.new(color.R, color.G, color.B)
 end
 
+--- Gets a players primary color using it's JSON data
+--- @param playerJson the `ReplayPlayer`'s json data
+--- @return a table with r, g and b properties
 function Util.extractPrimaryPlayerColor(playerJson: string): { r: number, g: number, b: number }
 	local r: number? = tonumber(playerJson:match('"primary"%s*:%s*{.-"r"%s*:%s*(%d+)'))
 	local g: number? = tonumber(playerJson:match('"primary"%s*:%s*{.-"g"%s*:%s*(%d+)'))
@@ -59,6 +80,7 @@ function Util.extractPrimaryPlayerColor(playerJson: string): { r: number, g: num
 	return { r = r / 255, g = g / 255, b = b / 255 }
 end
 
+--- @return the size of the dict
 function Util.getDictSize(dict): number
 	local i = 0
 
@@ -73,6 +95,7 @@ function Util.getDictSize(dict): number
 	return i
 end
 
+--- @return the element of the dict at `index`
 function Util.getDictIndex(dict, index: number)
 	local i = 0
 	local dictSize = Util.getDictSize(dict)
@@ -94,6 +117,7 @@ function Util.getDictIndex(dict, index: number)
 	return dictItem
 end
 
+--- @return the name of the key to the value `value` in `table`
 function Util.getDictKey(value, table): string
 	local key = ""
 	for k, v in pairs(table) do
@@ -104,6 +128,10 @@ function Util.getDictKey(value, table): string
 	return key
 end
 
+--- Finds and adds missing keys from `structureTable` in `normalTable`
+--- @param structureTable the table that contains all wanted keys and their default values
+--- @param normalTable the table that should mimic the structure of `structureTable`
+--- @return true if the `normalTable` was modified to fit the structure of `structureTable`
 function Util.deepStructureCopy(structureTable, normalTable): boolean
 	local adjusted = false
 	if typeof(structureTable) == "table" then
@@ -125,6 +153,10 @@ function Util.deepStructureCopy(structureTable, normalTable): boolean
 	return adjusted
 end
 
+--- Finds and removes unwanted keys in `normalTable` not found in `structureTable`
+--- @param structureTable the table that contains all wanted keys and their default values
+--- @param normalTable the table that should mimic the structure of `structureTable`
+--- @return true if the `normalTable` was modified to fit the structure of `structureTable`
 function Util.deepStructureClean(structureTable, normalTable): boolean
 	local adjusted = false
 	if typeof(normalTable) == "table" then
@@ -143,6 +175,8 @@ function Util.deepStructureClean(structureTable, normalTable): boolean
 	return adjusted
 end
 
+--- Initializes and saves the config by removing/adding keys and values (not) in `defaultConfig` and saving if any changes were necessary
+--- @param defaultConfig the table with the default keys and values you want your config to have
 function Util.initializeConfig(defaultConfig: { [any]: any })
 	local saveToConfig = false
 
@@ -159,6 +193,8 @@ function Util.initializeConfig(defaultConfig: { [any]: any })
 	end
 end
 
+--- Converts a `tostring(vec3)` back to a Vec3
+--- @param string the vector as a string
 function Util.stringToVec3(string: string): Vec3
 	local x, y, z = string.match(string, "%{ ([%d.-]+), ([%d.-]+), ([%d.-]+) %}")
 	if not x or not y or not z then
@@ -175,6 +211,7 @@ function Util.stringToVec3(string: string): Vec3
 	return vec
 end
 
+--- @return true if `n` is bigger than `min` and less then `max`
 function Util.isBetween(n: number, min: number, max: number): boolean
 	if n > min and n < max then
 		return true
@@ -183,6 +220,8 @@ function Util.isBetween(n: number, min: number, max: number): boolean
 	end
 end
 
+--- @return the index of the player within the table
+--- @return nil if the player is not in the table
 function Util.findPlayerInTable(table: { ReplayPlayer }, player: ReplayPlayer): number?
 	local index = nil
 	for i, tablePlayer: ReplayPlayer in table do
@@ -193,6 +232,7 @@ function Util.findPlayerInTable(table: { ReplayPlayer }, player: ReplayPlayer): 
 	return index
 end
 
+--- @return the closest ball relative to `targetPosition`
 function Util.getClosestBall(targetPosition: Vec3, frameData: ReplayFrame): ReplayBall
 	local balls = frameData.balls
 	local closestBallDistance = math.huge
@@ -208,6 +248,14 @@ function Util.getClosestBall(targetPosition: Vec3, frameData: ReplayFrame): Repl
 	return clostestBall
 end
 
+--[=[
+Checks if a player is withing a reasonable distance of the ball with their hands or head
+
+*Note: the radius of a normal driftball is 17*
+
+@return the player holding the ball
+@return `nil` if no player is holding the ball
+]=]
 function Util.isBallHeld(ball: ReplayBall, ballRadius: number, players: { ReplayPlayer }): ReplayPlayer?
 	local closestPlayerDistance = math.huge
 	local closestPlayer: ReplayPlayer = nil
@@ -237,6 +285,7 @@ function Util.isBallHeld(ball: ReplayBall, ballRadius: number, players: { Replay
 	end
 end
 
+--- @return the closest player in the table `players` to the `ball`
 function Util.getClosestPlayerToBall(ball: ReplayBall, players: { ReplayPlayer }): ReplayPlayer
 	local closestPlayerDistance = math.huge
 	local closestPlayer: ReplayPlayer = nil
@@ -263,12 +312,15 @@ function Util.getClosestPlayerToBall(ball: ReplayBall, players: { ReplayPlayer }
 	return closestPlayer
 end
 
+--- Prints `s` once when the key **N** is pressed down
 function Util.debugPrint(s: any)
 	if Input.getKeyDown(Input.Key.N) then
 		print(s)
 	end
 end
 
+--- Adds `Gui.spacing()` x number of times
+--- @param amount the amount of spacing to be added
 function Util.multispacing(amount: number)
 	for i = 1, amount, 1 do
 		Gui.sameLine()
@@ -276,30 +328,28 @@ function Util.multispacing(amount: number)
 	end
 end
 
-function Util.getKey(value, table): string
-	local key = ""
-	for k, v in pairs(table) do
-		if v == value then
-			key = k
-		end
-	end
-	return key
-end
-
-function Util.negateVec3(vec: Vec3): Vec3 -- annoying error workaround
+--- Avoids the annoying errors in vscode
+--- @return the negated Vec3 (-vec3)
+function Util.negateVec3(vec: Vec3): Vec3
 	vec.x = -vec.x
 	vec.y = -vec.y
 	vec.z = -vec.z
 	return vec
 end
 
-function Util.getForward(positionA: Vec3, positionB: Vec3): Vec3
-	local forward: Vec3 = (positionB - positionA):normalize()
+--- @param a start position
+--- @param b end position
+--- @return the normalized forward vector from a to b
+function Util.getForward(a: Vec3, b: Vec3): Vec3
+	local forward: Vec3 = (b - a):normalize()
 	return forward
 end
 
--- clamps every axis in the vector to be between max and min
-function Util.vec3Clamp(vec: Vec3, min: number, max: number): Vec3
+--- @param vec the vector to be clamped
+--- @param min the min value on all axis
+--- @param max the max value on all axis
+--- @return the clamped vec3 on all axis
+function Util.vec3ClampAxis(vec: Vec3, min: number, max: number): Vec3
 	local axises = { x = vec.x, y = vec.y, z = vec.z }
 
 	for axis, value in pairs(axises) do
@@ -317,14 +367,24 @@ function Util.vec3Clamp(vec: Vec3, min: number, max: number): Vec3
 	return vec
 end
 
-function Util.clampMagnitude3(vec: Vec3, maxMagnitude: number): Vec3
-	if vec:length() > maxMagnitude then
-		return vec:normalize() * maxMagnitude
+--- @param vec the vector to be clamped
+--- @param min the min vector length
+--- @param max the max vector length
+--- @return the vec3 clamped in length
+function Util.clampLength3(vec: Vec3, min: number, max: number): Vec3
+	if vec:length() > max then
+		return vec:normalize() * max
+	elseif vec:length() < min then
+		return vec:normalize() * min
 	else
 		return vec
 	end
 end
 
+--- @param a the first vector
+--- @param b the second vector
+--- @param axis the axis for the angle to be calculated on
+--- @return the angle in radians between `a` and `b` on `axis`
 function Util.angleBetweenVec3s(a: Vec3, b: Vec3, axis: Vec3): number
 	a = a:normalize()
 	b = b:normalize()
@@ -344,7 +404,10 @@ function Util.angleBetweenVec3s(a: Vec3, b: Vec3, axis: Vec3): number
 	end
 end
 
+--- Checks if a vector is above `min` and below `max`
+--- @return true if n is above `min` and below `max` according to `up`
 function Util.isBetweenVector(n: Vec3, min: Vec3, max: Vec3, up: Vec3): boolean
+	up = up:normalize()
 	local nHeight = n:dot(up)
 	local minHeight = min:dot(up)
 	local maxHeight = max:dot(up)
@@ -352,14 +415,21 @@ function Util.isBetweenVector(n: Vec3, min: Vec3, max: Vec3, up: Vec3): boolean
 	return nHeight >= minHeight and nHeight <= maxHeight
 end
 
-function Util.clampMagnitude2(vec: Vec2, maxMagnitude: number): Vec2
-	if vec:length() > maxMagnitude then
-		return vec:normalize() * maxMagnitude
+--- @param vec the vector to be clamped
+--- @param min the min vector length
+--- @param max the max vector length
+--- @return the vec2 clamped in length
+function Util.clampLength2(vec: Vec2, min: number, max: number): Vec2
+	if vec:length() > max then
+		return vec:normalize() * max
+	elseif vec:length() < min then
+		return vec:normalize() * min
 	else
 		return vec
 	end
 end
 
+--- @return the rotated `vec` by radians `rads`
 function Util.rotateVec2(vec: Vec2, rads: number): Vec2
 	return Vec2.new(
 		(vec.x * math.cos(rads)) + (vec.y * math.sin(rads)),
@@ -367,14 +437,18 @@ function Util.rotateVec2(vec: Vec2, rads: number): Vec2
 	)
 end
 
+--- @return true if `v1` < `point` > `v2`
 function Util.isBetweenVec2(v1: Vec2, v2: Vec2, point: Vec2)
 	return v1.x < point.x and v2.x > point.x and v1.y < point.y and v2.y > point.y
 end
 
+--- @return a quat with euler degrees `(vec.x, vec.y, vec.z)`
 function Util.quatFromVec3(vec: Vec3): Quat
 	return Quat.fromEuler(vec.x, vec.y, vec.z)
 end
 
+--- @return `angle` the rotation angle in degrees. The value is in range [0, 360].
+--- @return `axis` the axis of rotation as a normalized `Vec3`. If the quaternion represents no rotation, the axis defaults to `Vec3.upVector`.
 function Util.QuatToAngleAxis(quat: Quat): { angle: number, axis: Vec3 }
 	local angle = 2 * math.acos(quat.w)
 
@@ -384,15 +458,21 @@ function Util.QuatToAngleAxis(quat: Quat): { angle: number, axis: Vec3 }
 
 	local axis = Vec3.new(quat.x / math.sin(angle / 2), quat.y / math.sin(angle / 2), quat.z / math.sin(angle / 2))
 
-	return { angle = angle, axis = axis }
+	return { angle = angle, axis = axis:normalize() }
 end
 
-function Util.lookAt(cameraPosition: Vec3, point: Vec3, up: Vec3)
+--- lookAt returns the Quat that looks at `to`, unlike `camera:lookAt` that automatically rotates the camera
+--- @param from where to look from
+--- @param to the point to look at
+--- @param up the upwards direction of the quat
+--- @return a Quat that looks towards `to` from the position of `from` with an upwards direction of `up`
+function Util.lookAt(from: Vec3, to: Vec3, up: Vec3): Quat
 	up = up:normalize()
-	local forward = Util.getForward(cameraPosition, point)
+	local forward = Util.getForward(from, to)
 	return Quat.fromXZ(forward, up)
 end
 
+--- @return the amount of seconds between `past` and `future`
 function Util.dateTimeDeltaSeconds(past: DateTime, future: DateTime): number
 	local ticksPast = (past.ticks / 10000000) - 62167219200
 	local ticksFuture = (future.ticks / 10000000) - 62167219200
@@ -400,6 +480,7 @@ function Util.dateTimeDeltaSeconds(past: DateTime, future: DateTime): number
 	return os.difftime(ticksFuture, ticksPast)
 end
 
+--- Linearly interpolate between a and b by 0 <= t <= 1
 function Util.lerp(a: number, b: number, t: number): number
 	if a == nil then
 		return b
@@ -410,6 +491,9 @@ function Util.lerp(a: number, b: number, t: number): number
 	return a * (1.0 - t) + b * t
 end
 
+--- @return `max` if `n` < `min`
+--- @return `min` if `n` > `max`
+--- @return otherwise returns `n`
 function Util.clampAround(n: number, min: number, max: number): number
 	if n < min then
 		return max

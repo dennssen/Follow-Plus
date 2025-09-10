@@ -3,7 +3,7 @@
 local Util = require("util")
 
 local lastAnimationCycle: number = os.clock()
-local defaultEmoteIndex: number = 3
+local defaultEmoteIndex: number = 1
 
 export type Emote = {
 	__index: Emote,
@@ -50,17 +50,17 @@ export type Emotes = {
 
 local Emotes: Emotes = {} :: Emotes
 Emotes.emoteList = {
-	Emote.new(1, { "|   |" }),
-	Emote.new(2, { "^-^", "^_-", "^-^", "^-^" }),
-	Emote.new(3, { "o_o", "o_o.", "o_o;", "o_o.", "o_o" }),
-	Emote.new(4, { "x_x", "X_X" }),
-	Emote.new(5, { "0_0", "-_-", "<_<", ">_>", "0_0" }),
-	Emote.new(6, { "+" }),
-	Emote.new(7, { "-" }),
-	Emote.new(8, { "->", "-->" }),
-	Emote.new(9, { "<-", "<--" }),
-	Emote.new(10, { "^", "^^" }),
-	Emote.new(11, { "v", "vv", "VV", "V" }),
+	Emote.new(11, { "|   |" }),
+	Emote.new(9, { "^-^", "^_-", "^-^", "^-^" }),
+	Emote.new(7, { "o_o", "o_o.", "o_o;", "o_o.", "o_o" }),
+	Emote.new(8, { "x_x", "X_X" }),
+	Emote.new(10, { "0_0", "-_-", "<_<", ">_>", "0_0" }),
+	Emote.new(1, { "+" }),
+	Emote.new(2, { "-" }),
+	Emote.new(3, { "->", "-->" }),
+	Emote.new(4, { "<-", "<--" }),
+	Emote.new(5, { "^", "^^" }),
+	Emote.new(6, { "v", "vv", "VV", "V" }),
 }
 Emotes.animationCycleSpeed = 1
 
@@ -95,8 +95,12 @@ end
 function Emotes:selectEmoteGUI(lable: string)
 	if Gui.beginCombo(lable, `{self.selectedEmote.animationFrame}###{self.selectedEmote.id}`) then
 		for _, emote: Emote in self.emoteList do
-			if Gui.selectable(`{emote.animationFrame}###{emote.id}`, self.selectedEmote.id == emote.id) then
+			local isSelected: boolean = self.selectedEmote.id == emote.id
+			if Gui.selectable(`{emote.animationFrame}###{emote.id}`, isSelected) then
 				self:setEmote(emote)
+			end
+			if isSelected then
+				Gui.setItemDefaultFocus()
 			end
 		end
 		Gui.endCombo()
