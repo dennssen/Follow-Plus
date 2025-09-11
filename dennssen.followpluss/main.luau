@@ -3,6 +3,12 @@ local _version: string = "1.10.0"
 
 -- TODO:
 -- Record Match Replays
+-- Checkbox setting
+-- Start recording on "onRoundStartHook()"
+-- End recording on "onRoundEndHook()"
+-- End recording when player exits arena
+-- End recording when switching to a player not in an arena
+-- End recording when switching ot a player in a different arena
 
 -- dependecies
 local Util = require("util")
@@ -119,6 +125,7 @@ local function initializeProfiles()
 		focusedArena = false,
 		isLeftHanded = false,
 		showQuests = true,
+		autoRecordReplays = false,
 	}
 
 	-- remove every value in the root of the config that isn't profiles or lastUsedProfile
@@ -176,6 +183,10 @@ end
 local deltaTime: number = 0
 local readLocation = profile.readLocation -- 0: Live, 1 or above: Replay
 
+-- Replay Recording
+local autoRecordReplays: boolean = profile.autoRecordReplays and Settings.getLuauReplayControlAllowed()
+local isRecordingReplay: boolean = false
+
 -- VOIP
 local isSelfMuted = false
 local muteSelf = profile.muteSelf
@@ -223,11 +234,57 @@ local BallGoalMode = {
 	BothGoals = 2,
 }
 
+-- player
+local targetPlayer: ReplayPlayer? = nil
+local targetPlayerName = profile.targetPlayerName
+local previousTargetPlayerId = -1
+local hidePlayerHead: boolean = false
+local headPosition: Vec3 = Vec3.new(0, 0, 0)
+local headRotation: Quat = Quat.identity
+local playerVelocity = Vec3.zeroVector
+local playerChestRotation: Quat = Quat.identity
+local isLocalPlayer = false
+local teamIndex = -1
+
+local previousLeftHandPosition: Vec3 = Vec3.zeroVector
+local previousRightHandPosition: Vec3 = Vec3.zeroVector
+local isLeftHanded: boolean = profile.isLeftHanded
+local playerSwitchTime: number = 0
+local muteDelay: number = 1
+
+local lastServerPlayerList: { number } = {}
+local lastTeammatesList: { ReplayPlayer } = {}
+local teammatesList: { ReplayPlayer } = {}
+
 local cachedGamemodeAmount: number = 0
 
 local FollowArena = {} :: FollowArena
 FollowArena.__index = FollowArena
 setmetatable(FollowArena, { __index = Arena })
+
+function FollowArena:onRoundStartHook()
+	if not targetPlayer or targetPlayer.teamIndex == Util.TeamIndex.NoTeam then
+		return
+	end
+
+	if not autoRecordReplays or not Settings.getLuauReplayControlAllowed() then
+		return
+	end
+
+	if Replay.startRecording() then
+		isRecordingReplay = true
+	end
+end
+
+function FollowArena:onRoundEndHook(_isRestart: boolean, _homeScore: number, _awayScore: number)
+	if not isRecordingReplay then
+		return
+	end
+
+	if Replay.stopRecording() then
+		isRecordingReplay = false
+	end
+end
 
 type Arena3v3 = FollowArena & {
 	homeRotationOffset: Quat,
@@ -780,28 +837,6 @@ local autoGoalCamLabel = "Enabled"
 local goalModeLabel = "Mode"
 local distanceLerpLabel = "Player/Ball Ratio"
 
--- player
-local targetPlayer: ReplayPlayer? = nil
-local targetPlayerName = profile.targetPlayerName
-local previousTargetPlayerId = -1
-local hidePlayerHead: boolean = false
-local headPosition: Vec3 = Vec3.new(0, 0, 0)
-local headRotation: Quat = Quat.identity
-local playerVelocity = Vec3.zeroVector
-local playerChestRotation: Quat = Quat.identity
-local isLocalPlayer = false
-local teamIndex = -1
-
-local previousLeftHandPosition: Vec3 = Vec3.zeroVector
-local previousRightHandPosition: Vec3 = Vec3.zeroVector
-local isLeftHanded: boolean = profile.isLeftHanded
-local playerSwitchTime: number = 0
-local muteDelay: number = 1
-
-local lastServerPlayerList: { number } = {}
-local lastTeammatesList: { ReplayPlayer } = {}
-local teammatesList: { ReplayPlayer } = {}
-
 -- grabbing
 local gestureControls: boolean = profile.gestureControls
 
@@ -850,7 +885,6 @@ local HandPose = {
 local radius = profile.radius
 local localRadius = radius
 local threshold = profile.threshold
-local wallDistance = 5
 
 -- no player orbit
 local orbitCenter: Vec3 = Vec3.new(0, 0, 0)
@@ -949,6 +983,12 @@ function setTargetPlayer(player: ReplayPlayer?)
 		lastTeammatesList = {}
 	end
 
+	if isRecordingReplay and player.teamIndex == Util.TeamIndex.NoTeam then
+		if Replay.stopRecording() then
+			isRecordingReplay = false
+		end
+	end
+
 	if showQuests then -- show quests
 		camera:showQuestsForPlayerById(player.playerId, true)
 	end
@@ -975,8 +1015,20 @@ function setArena(_arena: FollowArena)
 	if not _arena then
 		return
 	end
+
+	if arena.name == _arena.name then
+		return
+	end
+
+	if isRecordingReplay then -- new arena
+		if Replay.stopRecording() then
+			isRecordingReplay = false
+		end
+	end
+
 	arena = _arena
 	arena.frameIndex = readLocation
+	arena.instantUpdate = true
 	BallSim.arena = arena :: any
 end
 
@@ -1040,6 +1092,23 @@ function onGui()
 	Gui.sameLine()
 	showQuests = Gui.checkbox(generateAsterisk(showQuestsLabel, showQuests ~= profile.showQuests), showQuests)
 	Gui.setItemTooltip("Will show the quest for the followed player when they activate a quest")
+
+	Gui.sameLine()
+	if not Settings.getLuauReplayControlAllowed() then
+		Gui.beginDisabled()
+	end
+	autoRecordReplays = Gui.checkbox(
+		generateAsterisk("Auto Rec Replays", autoRecordReplays ~= profile.autoRecordReplays),
+		autoRecordReplays
+	)
+	if not Settings.getLuauReplayControlAllowed() then
+		Gui.setItemTooltip(
+			"DISABLED! To enable this setting go to Spectator -> Settings -> Allow Camera Scripts to Start/Stop Replay File Recording"
+		)
+		Gui.endDisabled()
+	else
+		Gui.setItemTooltip("Auto record replays of your driftball rounds")
+	end
 
 	muteSelf = Gui.checkbox(generateAsterisk(muteSelfLabel, muteSelf ~= profile.muteSelf), muteSelf)
 	Gui.setItemTooltip("Enable or disable muting yourself or the player you are currently following")
