@@ -1,5 +1,5 @@
 --!strict
-local _version: string = "1.9.0"
+local _version: string = "1.10.0"
 
 -- TODO:
 -- Record Match Replays
