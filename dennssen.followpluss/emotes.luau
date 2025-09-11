@@ -3,7 +3,7 @@
 local Util = require("util")
 
 local lastAnimationCycle: number = os.clock()
-local defaultEmoteIndex: number = 1
+local defaultEmoteIndex: number = 11
 
 export type Emote = {
 	__index: Emote,
