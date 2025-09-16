@@ -731,7 +731,6 @@ end
 function getArenas(): { [any]: FollowArena }
 	local arenas: { [any]: FollowArena } = {}
 	local gamemodes = SpectatorGamemodes.listGamemodes()
-	print("got gamemodes in getArenas")
 	for _, gamemode in gamemodes do
 		local slotId = gamemode:getSlotId()
 		if slotId:find("TKB") and not slotId:find("Full") then
@@ -745,8 +744,6 @@ function getArenas(): { [any]: FollowArena }
 			arenas[arena.name] = arena
 		end
 	end
-
-	print("got arenas")
 
 	return arenas
 end
@@ -883,7 +880,6 @@ local HandPose = {
 
 -- radius
 local radius = profile.radius
-local localRadius = radius
 local threshold = profile.threshold
 
 -- no player orbit
@@ -1639,7 +1635,6 @@ Be able to grab the camera and throw it to change modes
 			Gui.treePop()
 		end
 		if Gui.treeNode("Other") then
-			Gui.text("Temporary Radius: " .. tostring(localRadius))
 			Gui.text("Distance: " .. tostring(distance))
 			Gui.text("Ball Distance: " .. tostring(Util.getDist(headPosition, ballPosition)))
 			Gui.treePop()
