@@ -1573,34 +1573,6 @@ Be able to grab the camera and throw it to change modes
 
 	if Gui.treeNode("Debug") then
 		Gui.indent()
-		Gui.separatorText("Debug Settings")
-		BallSim.debug = Gui.checkbox("Debug Ball Prediction", BallSim.debug)
-		BallSim.gravityScale = Gui.sliderFloat("Gravity", BallSim.gravityScale, 0, 1)
-		BallSim.drag = Gui.sliderFloat("Drag", BallSim.drag, 0, 1)
-
-		Gui.newLine()
-
-		debugFaceTheBall = Gui.checkbox("Debug Face The Ball", debugFaceTheBall)
-
-		Gui.newLine()
-
-		if followFreecam and Gui.button("stop follow freecam") then
-			followFreecam = false
-			camera:followCamera(nil)
-		end
-		if not followFreecam and Gui.button("follow freecam") then
-			followFreecam = true
-			sendMessage(getCameraById("anotheraxiom.freecam"), {
-				messageType = "setTransform",
-				rotation = camera.rotation,
-				position = camera.position,
-				fieldOfView = camera.fieldOfView,
-			})
-			camera:followCamera(getCameraById("anotheraxiom.freecam"))
-		end
-
-		Gui.unindent()
-		Gui.indent()
 		Gui.separatorText("Info")
 		Gui.indent()
 		if Gui.treeNode("Camera") then
@@ -1632,6 +1604,34 @@ Be able to grab the camera and throw it to change modes
 			Gui.text("Arena Name: " .. arena.name)
 			Gui.text("Arena Position: " .. tostring(arena.transform.position))
 			Gui.text("Arena Rotation: " .. tostring(arena.transform.rotation:euler()))
+			Gui.treePop()
+		end
+		if Gui.treeNode("Settings") then
+			BallSim.debug = Gui.checkbox("Debug Ball Prediction", BallSim.debug)
+			BallSim.gravityScale = Gui.sliderFloat("Gravity", BallSim.gravityScale, 0, 1)
+			BallSim.drag = Gui.sliderFloat("Drag", BallSim.drag, 0, 1)
+
+			Gui.newLine()
+
+			debugFaceTheBall = Gui.checkbox("Debug Face The Ball", debugFaceTheBall)
+			debugAutoRecord = Gui.checkbox("Debug Auto Record", debugAutoRecord)
+
+			Gui.newLine()
+
+			if followFreecam and Gui.button("stop follow freecam") then
+				followFreecam = false
+				camera:followCamera(nil)
+			end
+			if not followFreecam and Gui.button("follow freecam") then
+				followFreecam = true
+				sendMessage(getCameraById("anotheraxiom.freecam"), {
+					messageType = "setTransform",
+					rotation = camera.rotation,
+					position = camera.position,
+					fieldOfView = camera.fieldOfView,
+				})
+				camera:followCamera(getCameraById("anotheraxiom.freecam"))
+			end
 			Gui.treePop()
 		end
 		if Gui.treeNode("Other") then
