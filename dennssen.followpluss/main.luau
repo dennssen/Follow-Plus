@@ -2,13 +2,9 @@
 local _version: string = "1.10.0"
 
 -- TODO:
--- Record Match Replays
--- Checkbox setting
--- Start recording on "onRoundStartHook()"
--- End recording on "onRoundEndHook()"
--- End recording when player exits arena
--- End recording when switching to a player not in an arena
--- End recording when switching ot a player in a different arena
+
+-- Feature:
+-- When using Head Rotation (possibly other 3rd person modes) and hold down right click, the player gets full control over the rotation of the 3rd person mode by using their mouse until they let go of right click.
 
 -- dependecies
 local Util = require("util")
@@ -186,6 +182,43 @@ local readLocation = profile.readLocation -- 0: Live, 1 or above: Replay
 -- Replay Recording
 local autoRecordReplays: boolean = profile.autoRecordReplays and Settings.getLuauReplayControlAllowed()
 local isRecordingReplay: boolean = false
+local debugAutoRecord: boolean = false
+
+function startRecording(debugMessage: string?)
+	if not autoRecordReplays or not Settings.getLuauReplayControlAllowed() then
+		return
+	end
+
+	if isRecordingReplay or readLocation ~= 0 then
+		return
+	end
+
+	if debugAutoRecord then
+		print(`start recording | {debugMessage}`)
+		isRecordingReplay = true
+		return
+	end
+
+	if Replay.startRecording() then
+		isRecordingReplay = true
+	end
+end
+
+function stopRecording(debugMessage: string?)
+	if not isRecordingReplay then
+		return
+	end
+
+	if debugAutoRecord then
+		print(`stop recording | {debugMessage}`)
+		isRecordingReplay = false
+		return
+	end
+
+	if Replay.stopRecording() then
+		isRecordingReplay = false
+	end
+end
 
 -- VOIP
 local isSelfMuted = false
@@ -267,23 +300,11 @@ function FollowArena:onRoundStartHook()
 		return
 	end
 
-	if not autoRecordReplays or not Settings.getLuauReplayControlAllowed() then
-		return
-	end
-
-	if Replay.startRecording() then
-		isRecordingReplay = true
-	end
+	startRecording("round start")
 end
 
 function FollowArena:onRoundEndHook(_isRestart: boolean, _homeScore: number, _awayScore: number)
-	if not isRecordingReplay then
-		return
-	end
-
-	if Replay.stopRecording() then
-		isRecordingReplay = false
-	end
+	stopRecording("round end")
 end
 
 type Arena3v3 = FollowArena & {
@@ -979,19 +1000,18 @@ function setTargetPlayer(player: ReplayPlayer?)
 		lastTeammatesList = {}
 	end
 
-	if isRecordingReplay and player.teamIndex == Util.TeamIndex.NoTeam then
-		if Replay.stopRecording() then
-			isRecordingReplay = false
-		end
+	if player.teamIndex == Util.TeamIndex.NoTeam then
+		stopRecording("new player - no team")
 	end
 
 	if showQuests then -- show quests
 		camera:showQuestsForPlayerById(player.playerId, true)
 	end
 
-	setArena(getClosestArena(player.root.position))
 	targetPlayer = player
 	targetPlayerName = player.playerName
+	teamIndex = player.teamIndex
+	setArena(getClosestArena(player.root.position))
 end
 
 function clearTargetPlayer()
@@ -1002,6 +1022,7 @@ function clearTargetPlayer()
 		end
 		isSelfMuted = not muteSelf
 
+		stopRecording("clear target player")
 		targetPlayerName = ""
 		targetPlayer = nil
 	end
@@ -1012,20 +1033,26 @@ function setArena(_arena: FollowArena)
 		return
 	end
 
-	if arena.name == _arena.name then
+	local sameArena = arena and arena.name == _arena.name
+	if sameArena then
+		if arena.isGameActive and teamIndex ~= Util.TeamIndex.NoTeam then -- Different player in a different arena that they are playing in and the game is on going
+			startRecording("join active game")
+		end
 		return
 	end
 
-	if isRecordingReplay then -- new arena
-		if Replay.stopRecording() then
-			isRecordingReplay = false
-		end
-	end
+	stopRecording("new player - different arena")
 
 	arena = _arena
 	arena.frameIndex = readLocation
 	arena.instantUpdate = true
+	arena:tick()
+
 	BallSim.arena = arena :: any
+
+	if arena.isGameActive and teamIndex ~= Util.TeamIndex.NoTeam then
+		startRecording("join active game")
+	end
 end
 
 function onGui()
@@ -1103,7 +1130,7 @@ function onGui()
 		)
 		Gui.endDisabled()
 	else
-		Gui.setItemTooltip("Auto record replays of your driftball rounds")
+		Gui.setItemTooltip("Automatically records replays of your Driftball rounds")
 	end
 
 	muteSelf = Gui.checkbox(generateAsterisk(muteSelfLabel, muteSelf ~= profile.muteSelf), muteSelf)
@@ -1161,7 +1188,6 @@ function onGui()
 		if Gui.button(Icon.Check) then
 			listActive = false
 		end
-		Util.multispacing(25)
 		Gui.sameLine()
 		if Gui.button(Icon.Trash) then
 			clearTargetPlayer()
@@ -1482,6 +1508,7 @@ Be able to grab the camera and throw it to change modes
 					cameraPositionOffset = tostring(cameraPositionOffset),
 					isLeftHanded = isLeftHanded,
 					showQuests = showQuests,
+					autoRecordReplays = autoRecordReplays,
 				}
 				lastUsedProfile = newProfileName
 				config.lastUsedProfile = lastUsedProfile
@@ -1552,6 +1579,7 @@ Be able to grab the camera and throw it to change modes
 				cameraPositionOffset = tostring(cameraPositionOffset),
 				isLeftHanded = isLeftHanded,
 				showQuests = showQuests,
+				autoRecordReplays = autoRecordReplays,
 			}
 			profile = config.profiles[lastUsedProfile]
 			saveConfig()
@@ -1637,6 +1665,7 @@ Be able to grab the camera and throw it to change modes
 		if Gui.treeNode("Other") then
 			Gui.text("Distance: " .. tostring(distance))
 			Gui.text("Ball Distance: " .. tostring(Util.getDist(headPosition, ballPosition)))
+			Gui.text("Is Recording Replay: " .. tostring(isRecordingReplay))
 			Gui.treePop()
 		end
 
@@ -1726,6 +1755,11 @@ function updatePlayerData(player: ReplayPlayer, frame: ReplayFrame)
 
 	if teamIndex ~= player.teamIndex then
 		teamIndex = player.teamIndex
+
+		if teamIndex == Util.TeamIndex.NoTeam then
+			stopRecording("player leave arena")
+		end
+
 		setArena(getClosestArena(player.root.position))
 	end
 end
@@ -2536,8 +2570,8 @@ function tick(dt)
 		return
 	end
 
-	updatePlayerData(targetPlayer, frame)
 	arena:tick()
+	updatePlayerData(targetPlayer, frame)
 
 	local ball = nil
 	if targetPlayer.teamIndex == Util.TeamIndex.NoTeam then
@@ -2566,6 +2600,8 @@ function onExit()
 	if targetPlayer and showQuests then -- show quests
 		camera:showQuestsForPlayerById(targetPlayer.playerId, false)
 	end
+
+	stopRecording("exit camera")
 
 	muteAll(false)
 end
@@ -2599,6 +2635,7 @@ type MessageValues = {
 	goalMode: number?,
 	hideNearestHead: boolean?,
 	showQuests: boolean?,
+	autoRecordReplays: boolean?,
 }
 
 function onMessageReceived(messageTable: MessageValues)
@@ -2640,6 +2677,12 @@ function onMessageReceived(messageTable: MessageValues)
 	-- muteSelf is a boolean that when set to true makes the camera unable to hear the followed player talk in game.
 	if messageTable.muteSelf ~= nil then
 		muteSelf = messageTable.muteSelf
+	end
+	-- autoRecordReplays is a boolean that enables follow pluss to auto record your driftball rounds in replays.
+	if messageTable.autoRecordReplays ~= nil then
+		if Settings.getLuauReplayControlAllowed() then
+			autoRecordReplays = messageTable.autoRecordReplays
+		end
 	end
 	-- targetPlayer is a ReplayPlayer of the player the camera will follow. By setting targetPlayer it will attempt to switch to that player. If the player doesn't exist it will keep the current player as the targetPlayer.
 	if messageTable.targetPlayer then
