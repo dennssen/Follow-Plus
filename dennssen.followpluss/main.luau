@@ -2517,7 +2517,16 @@ function tick(dt)
 
 	tryGetArenas()
 
-	if #frame.players == 0 or not targetPlayer then
+	if #frame.players == 0 then
+		noPlayerOrbit(dt)
+		return
+	end
+
+	if not targetPlayer then
+		setTargetPlayer(frame:getPlayerByName(targetPlayerName))
+	end
+
+	if not targetPlayer then -- double if statement to please the type checker
 		noPlayerOrbit(dt)
 		return
 	end
