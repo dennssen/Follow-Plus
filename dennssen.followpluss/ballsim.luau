@@ -147,13 +147,13 @@ function BallSim:simBallPath(ball: ReplayBall, steps: number, dt: number)
 		local previousVelocity: Vec3 = currentVelocity
 
 		local dragAcceleration = currentVelocity * -self.drag
-		dragAcceleration = Util.clampMagnitude3(dragAcceleration, self.maxDragAcceleration)
+		dragAcceleration = Util.clampLength3(dragAcceleration, 0, self.maxDragAcceleration)
 
 		currentVelocity = currentVelocity + (gravity.gravity * self.gravityScale * dt)
 
 		currentVelocity = currentVelocity + (dragAcceleration * dt)
 
-		currentVelocity = Util.clampMagnitude3(currentVelocity, 18 * 100)
+		currentVelocity = Util.clampLength3(currentVelocity, 0, 18 * 100)
 
 		local angularDampingFactor = 1 - (self.angularDamping * dt)
 		self.angularVelocity = self.angularVelocity * math.max(0, angularDampingFactor)
