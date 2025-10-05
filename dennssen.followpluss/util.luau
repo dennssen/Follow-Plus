@@ -12,6 +12,10 @@ Util.TeamIndex = {
 	AwayTeam = 1,
 }
 
+--- Toggle debug printing
+--- Avoid calling the property directly. Instead let `Util.debugPrintToggle()` handle the logic.
+Util.printToggle = false
+
 --- Sends the `message` if the `camera` exists
 --- @param camera -- the SpectatorCamera to message
 --- @param message -- the message to send to the camera
@@ -315,6 +319,16 @@ end
 --- Prints `s` once when the key **N** is pressed down
 function Util.debugPrint(s: any)
 	if Input.getKeyDown(Input.Key.N) then
+		print(s)
+	end
+end
+
+function Util.debugPrintToggle(s: any)
+	if Input.getKeyDown(Input.Key.N) then
+		Util.printToggle = not Util.printToggle
+	end
+
+	if Util.printToggle then
 		print(s)
 	end
 end
