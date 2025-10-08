@@ -29,6 +29,7 @@ type BallSim = {
 	mass: number,
 	radius: number,
 	restitution: number,
+	maxBallVelocity: number,
 	collisionRotations: { Quat },
 	simPositions: { Vec3 },
 
@@ -71,6 +72,7 @@ BallSim.gravityScale = 0.7
 BallSim.mass = 1
 BallSim.radius = 17
 BallSim.restitution = 0.375
+BallSim.maxBallVelocity = 19 * 100 -- 19m/s
 BallSim.collisionRotations = {
 	Quat.identity, -- forward
 	Quat.fromEuler(0, 0, 90), -- right
@@ -153,7 +155,7 @@ function BallSim:simBallPath(ball: ReplayBall, steps: number, dt: number)
 
 		currentVelocity = currentVelocity + (dragAcceleration * dt)
 
-		currentVelocity = Util.clampLength3(currentVelocity, 0, 18 * 100)
+		currentVelocity = Util.clampLength3(currentVelocity, 0, self.maxBallVelocity)
 
 		local angularDampingFactor = 1 - (self.angularDamping * dt)
 		self.angularVelocity = self.angularVelocity * math.max(0, angularDampingFactor)
@@ -163,7 +165,7 @@ function BallSim:simBallPath(ball: ReplayBall, steps: number, dt: number)
 		-- collision
 		local lastPosition: Vec3 = self.simPositions[#self.simPositions]
 
-		local debugCollision: boolean = i == 1
+		local debugCollision: boolean = i == 1 and self.debug
 
 		local collisionInfo = self:simBallCollision(previousVelocity, lastPosition, currentPosition, dt, debugCollision)
 		if collisionInfo.collision then
@@ -229,7 +231,7 @@ function BallSim:simBallCollision(
 			lastHit.hitPosition = hit.position
 			lastHit.hitStart = previousPosition + offset
 		else
-			if self.debug and debug then
+			if debug then
 				WorldDraw.drawLine(previousPosition + offset, currentPosition + offset, 0, 1, 1, 1, 0)
 			end
 		end
