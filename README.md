@@ -1,6 +1,6 @@
-# Follow +
+# Follow+
 
-**Follow +** is a highly customizable, user friendly following Orion Drift spectator script for recording yourself and your gameplay from whatever angle suits you.
+**Follow+** is a highly customizable, user friendly following Orion Drift spectator script for recording yourself and your gameplay from whatever angle suits you.
 
 The camera has features such as:
 - Player list for easily finding your player
