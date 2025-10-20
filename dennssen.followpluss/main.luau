@@ -4,6 +4,7 @@ local _version: string = "1.11.1"
 -- Feature:
 -- When using Head Rotation (possibly other 3rd person modes) and hold down right click, the player gets full control over the rotation of the 3rd person mode by using their mouse until they let go of right click.
 -- Add content props support
+-- Add overlay support
 
 -- dependecies
 local Util = require("util")
