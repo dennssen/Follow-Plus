@@ -2609,7 +2609,7 @@ function tick(dt)
 	end
 
 	if not camera.isActive and not camera.isFollowed then
-		alwaysTick = false
+		alwaysTick = nil
 		onExit()
 		return
 	end
