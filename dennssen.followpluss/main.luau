@@ -80,17 +80,23 @@ function stringToVec3(string: string): Vec3
 	return vec
 end
 
-function muteAll(mute: boolean)
+function muteAll(mute: boolean, debug: boolean?)
 	local frame = getGameData()
 	for _, player in frame.players do
-		Settings.mutePlayerByName(player.playerName, mute)
+		local muted = Settings.mutePlayerByName(player.playerName, mute)
+
+		if debug then
+			print(`Tried to mute/unmute {player.playerName} with a success of: {muted}`)
+		end
 	end
 end
 
-function muteList(mute: boolean, players: { ReplayPlayer })
+function muteList(mute: boolean, players: { ReplayPlayer }, debug: boolean?)
 	for _, player: ReplayPlayer in players do
-		if not Settings.mutePlayerByName(player.playerName, mute) then
-			print(player.playerName)
+		local muted = Settings.mutePlayerByName(player.playerName, mute)
+
+		if debug then
+			print(`Tried to mute/unmute {player.playerName} with a success of: {muted}`)
 		end
 	end
 end
@@ -1155,10 +1161,8 @@ function onGui()
 	isLeftHanded = Gui.checkbox(generateAsterisk(isLeftHandedLabel, isLeftHanded ~= profile.isLeftHanded), isLeftHanded)
 	Gui.setItemTooltip("Makes you left handed | Used for Hand Held mode")
 
-	--[[focusedArena = Gui.checkbox(focusedArenaLabel, focusedArena)
-	if not Gui.isItemActive() then
-		focusedArenaLabel = generateAsterisk("Focused Arena", focusedArena ~= profile.focusedArena)
-	end
+	--[[Gui.sameLine()
+	focusedArena = Gui.checkbox(generateAsterisk(focusedArenaLabel, focusedArena ~= profile.focusedArena), focusedArena)
 	Gui.setItemTooltip("Mutes all Players OUTSIDE of the Arena the Followed Player is currently in")]]
 
 	targetPlayerName = Gui.inputText(
@@ -1638,6 +1642,33 @@ Be able to grab the camera and throw it to change modes
 			Gui.text("Arena Name: " .. arena.name)
 			Gui.text("Arena Position: " .. tostring(arena.transform.position))
 			Gui.text("Arena Rotation: " .. tostring(arena.transform.rotation:euler()))
+			Gui.treePop()
+		end
+		if Gui.treeNode("VOIP") then
+			if Gui.button("Mute everyone") then
+				muteAll(true, true)
+			end
+			Gui.sameLine()
+			if Gui.button("Unmute everyone") then
+				muteAll(false, true)
+			end
+			if arena then
+				if Gui.button("Mute arena") then
+					muteList(true, arena.players, true)
+				end
+				if Gui.button("Mute outside") then
+					local mutePlayers = frame.players
+					for _, player in arena.players do
+						local arenaPlayer = Util.findPlayerInTable(mutePlayers, player)
+
+						if arenaPlayer then
+							table.remove(mutePlayers, arenaPlayer)
+						end
+					end
+
+					muteList(true, mutePlayers, true)
+				end
+			end
 			Gui.treePop()
 		end
 		if Gui.treeNode("Settings") then
