@@ -765,6 +765,106 @@ function Driftblitz:GUIChangeDimensions()
 	self:setupDimensions()
 end
 
+type ZDrift = FollowArena & {
+	homeRotationOffset: Quat,
+	awayRotationOffset: Quat,
+	boxSize: Vec3,
+	boxOffset: Vec3,
+	centerBoxOffset: Vec3,
+	goalBoxSize: Vec3,
+	goalPositionOffset: Vec3,
+}
+
+local ZDrift = {} :: ZDrift
+ZDrift.__index = ZDrift
+setmetatable(ZDrift, { __index = FollowArena })
+
+ZDrift.homeRotationOffset = Quat.fromEuler(0, 0, 90)
+ZDrift.awayRotationOffset = Quat.fromEuler(0, 0, -90)
+ZDrift.boxSize = Vec3.new(7270, 11825, 1440)
+ZDrift.boxOffset = Vec3.new(0, 0, 740)
+ZDrift.centerBoxOffset = Vec3.new(0, 0, 100)
+ZDrift.goalBoxSize = Vec3.new(100, 890, 300)
+ZDrift.goalPositionOffset = Vec3.new(5295, 0, 175)
+
+function ZDrift.new(gamemode: ModuleStateSpectatorLuaApi): FollowArena
+	local self = setmetatable(FollowArena.new(gamemode, readLocation), ZDrift) :: any
+	self.name = self.slotId
+	self.type = "zdrift"
+	self:setupDimensions()
+	return self :: ZDrift
+end
+
+function ZDrift:isPointOnHomeSide(point: Vec3): boolean
+	local homeDirection = (self.transform.rotation * ZDrift.homeRotationOffset):getForwardVector()
+	local ballDirection = Util.getForward(self.transform.position, point)
+	if homeDirection:dot(ballDirection) >= 0 then
+		return true
+	else
+		return false
+	end
+end
+
+function ZDrift:setupDimensions()
+	self.box = Box.new(
+		self.transform.position + self.transform.rotation:rotateVector(ZDrift.boxOffset),
+		ZDrift.boxSize,
+		self.transform.rotation
+	)
+
+	self.home.goal = {
+		position = self.transform.position
+			+ (self.transform.rotation * ZDrift.homeRotationOffset):rotateVector(ZDrift.goalPositionOffset),
+		rotation = self.transform.rotation * ZDrift.homeRotationOffset:inverse(),
+		box = Box.empty,
+	}
+
+	self.home.goal.box = Box.new(self.home.goal.position, ZDrift.goalBoxSize, self.home.goal.rotation)
+
+	self.away.goal = {
+		position = self.transform.position
+			+ (self.transform.rotation * ZDrift.awayRotationOffset):rotateVector(ZDrift.goalPositionOffset),
+		rotation = self.transform.rotation * ZDrift.awayRotationOffset:inverse(),
+		box = Box.empty,
+	}
+	self.away.goal.box = Box.new(self.away.goal.position, ZDrift.goalBoxSize, self.away.goal.rotation)
+end
+
+function ZDrift:getTeamRotation(teamIndex: number): Quat
+	local rotation = Quat.identity
+	if teamIndex == Util.TeamIndex.HomeTeam then
+		rotation = self.transform.rotation * ZDrift.homeRotationOffset
+	elseif teamIndex == Util.TeamIndex.AwayTeam then
+		rotation = self.transform.rotation * ZDrift.awayRotationOffset
+	end
+
+	return rotation
+end
+
+function ZDrift:checkGoalCam(player: ReplayPlayer): boolean
+	return false
+end
+
+function ZDrift:GUIChangeDimensions()
+	ZDrift.boxSize = Gui.dragFloat3("ZDrift Arena Size", ZDrift.boxSize, 1, -math.huge, math.huge)
+	ZDrift.boxOffset = Gui.dragFloat3("ZDrift Position Offset", ZDrift.boxOffset, 1, -math.huge, math.huge)
+	ZDrift.centerBoxOffset =
+		Gui.dragFloat3("ZDrift Place Ball Box Position Offset", ZDrift.centerBoxOffset, 1, -math.huge, math.huge)
+	ZDrift.goalBoxSize = Gui.dragFloat3("ZDrift Goal Size", ZDrift.goalBoxSize, 1, -math.huge, math.huge)
+	ZDrift.goalPositionOffset =
+		Gui.dragFloat3("ZDrift Goal Position Offset", ZDrift.goalPositionOffset, 1, -math.huge, math.huge)
+
+	if Gui.button("Print Dimensions") then
+		print(`boxSize: {ZDrift.boxSize}`)
+		print(`boxOffset: {ZDrift.boxOffset}`)
+		print(`centerBoxOffset: {ZDrift.centerBoxOffset}`)
+		print(`goalBoxSize: {ZDrift.goalBoxSize}`)
+		print(`goalPositionOffset: {ZDrift.goalPositionOffset}`)
+	end
+
+	self:setupDimensions()
+end
+
 function getArenas(): { [any]: FollowArena }
 	local arenas: { [any]: FollowArena } = {}
 	local gamemodes = SpectatorGamemodes.listGamemodes()
@@ -781,6 +881,9 @@ function getArenas(): { [any]: FollowArena }
 			or (slotId:find("TKB") and slotId:find("Driftplex") and not slotId:find("Full"))
 		then
 			local arena: FollowArena = Arena4v4.new(gamemode, readLocation) :: Arena4v4
+			arenas[arena.name] = arena
+		elseif slotId:find("ZDrift") then
+			local arena: FollowArena = ZDrift.new(gamemode, readLocation) :: ZDrift
 			arenas[arena.name] = arena
 		end
 	end
