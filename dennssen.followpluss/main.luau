@@ -1,5 +1,5 @@
 --!strict
-local _version: string = "1.12.0"
+local _version: string = "1.12.1"
 
 -- Feature:
 -- When using Head Rotation (possibly other 3rd person modes) and hold down right click, the player gets full control over the rotation of the 3rd person mode by using their mouse until they let go of right click.
@@ -2751,10 +2751,10 @@ function tick(dt)
 	updatePlayerData(targetPlayer, frame)
 
 	local ball = nil
-	if targetPlayer.teamIndex == Util.TeamIndex.NoTeam then
-		ball = getClosestBall(targetPlayer.root.position, frame)
-	else
+	if targetPlayer.teamIndex ~= Util.TeamIndex.NoTeam and arena.ball then
 		ball = arena.ball
+	else
+		ball = getClosestBall(targetPlayer.root.position, frame)
 	end
 
 	gravityUpDirection = targetPlayer.root.rotation:getUpVector()
