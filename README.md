@@ -20,6 +20,6 @@ The camera has features such as:
 - Creating multiple settings profiles and easily change between them
 
 ## Installation
-Download the file called `dennssen.followpluss.zip` from the [release page](https://github.com/dennssen/Follow-Pluss/releases) and place it in this directory on your computer: `Documents\Another-Axiom\A2\Cameras\Behaviors`. Then extract the `.zip` file in there so that a folder with the name `dennssen.followpluss` appears.
+Download the file called `dennssen.followpluss.zip` from the [release page](https://github.com/dennssen/Follow-Plus/releases) and place it in this directory on your computer: `Documents\Another-Axiom\A2\Cameras\Behaviors`. Then extract the `.zip` file in there so that a folder with the name `dennssen.followpluss` appears.
 
 If you don't see it in the spectator client make sure that when you open the `dennssen.followpluss` folder it contains files like `main.luau` and `package.json`. If there is another folder inside instead then it won't work.
