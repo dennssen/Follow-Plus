@@ -781,11 +781,11 @@ setmetatable(ZDrift, { __index = FollowArena })
 
 ZDrift.homeRotationOffset = Quat.fromEuler(0, 0, 90)
 ZDrift.awayRotationOffset = Quat.fromEuler(0, 0, -90)
-ZDrift.boxSize = Vec3.new(7270, 11825, 1440)
-ZDrift.boxOffset = Vec3.new(0, 0, 740)
-ZDrift.centerBoxOffset = Vec3.new(0, 0, 100)
-ZDrift.goalBoxSize = Vec3.new(100, 890, 300)
-ZDrift.goalPositionOffset = Vec3.new(5295, 0, 175)
+ZDrift.boxSize = Vec3.new(7180, 17800, 1710)
+ZDrift.boxOffset = Vec3.new(0, 0, 880)
+ZDrift.centerBoxOffset = Vec3.new(0, 0, 500)
+ZDrift.goalBoxSize = Vec3.new(600, 600, 600)
+ZDrift.goalPositionOffset = Vec3.new(8200, 0, 585)
 
 function ZDrift.new(gamemode: ModuleStateSpectatorLuaApi): FollowArena
 	local self = setmetatable(FollowArena.new(gamemode, readLocation), ZDrift) :: any
