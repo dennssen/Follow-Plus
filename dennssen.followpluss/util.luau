@@ -12,13 +12,13 @@ Util.TeamIndex = {
 	AwayTeam = 1,
 }
 
---- Toggle debug printing
+--- Toggle debug printing.
 --- Avoid calling the property directly. Instead let `Util.debugPrintToggle()` handle the logic.
 Util.printToggle = false
 
 --- Sends the `message` if the `camera` exists
---- @param camera -- the SpectatorCamera to message
---- @param message -- the message to send to the camera
+--- @param camera the SpectatorCamera to message
+--- @param message the message to send to the camera
 function Util.safeSendMessage(camera: SpectatorCamera, message: any)
 	if camera then
 		sendMessage(camera, message)
@@ -26,8 +26,8 @@ function Util.safeSendMessage(camera: SpectatorCamera, message: any)
 end
 
 --- Get the distance between 2 points
---- @param a -- the first point
---- @param b -- then second point
+--- @param a the first point
+--- @param b the second point
 --- @return the distance between `a` and `b` in centimeters
 function Util.getDist(a: Vec3, b: Vec3): number
 	local x: number = math.abs(a.x - b.x) ^ 2
@@ -50,18 +50,54 @@ function Util.getReplayFrameFromIndex(index: number): ReplayFrame
 	end
 end
 
---- Gets the `ReplayBall` type using it's JSON data
---- @param json the `ReplayBall`'s JSON
---- @return the type of the `ReplayBall` as a number. A type of 2 is a HeartBall
-function Util.getBallType(json: string): number
-	local typeVal = string.match(json, '"type"%s*:%s*([%d]+)')
-	local ballType: number? = tonumber(typeVal)
+--- Checks whether a ball is an arena ball or not
+--- @param ball the `ReplayBall`
+--- @return `true` or `false` depending on whether the ball is an arena ball or a heartball
+function Util.isArenaBall(ball: ReplayBall): boolean
+	local json: string = ball:toJson()
+	local color1String = json:match('"color1"%s*:%s*(%b{})')
+	local color2String = json:match('"color2"%s*:%s*(%b{})')
 
-	if ballType then
-		return ballType
-	else
-		return 0
+	if not color1String or not color2String then
+		return false
 	end
+
+	local color1 = {
+		r = 0,
+		g = 0,
+		b = 0,
+		a = 0,
+	}
+	local color2 = {
+		r = 0,
+		g = 0,
+		b = 0,
+		a = 0,
+	}
+
+	color1.r = tonumber(color1String:match('"r"%s*:%s*(%d+)')) :: number
+	color1.g = tonumber(color1String:match('"g"%s*:%s*(%d+)')) :: number
+	color1.b = tonumber(color1String:match('"b"%s*:%s*(%d+)')) :: number
+	color1.a = tonumber(color1String:match('"a"%s*:%s*(%d+)')) :: number
+
+	color2.r = tonumber(color2String:match('"r"%s*:%s*(%d+)')) :: number
+	color2.g = tonumber(color2String:match('"g"%s*:%s*(%d+)')) :: number
+	color2.b = tonumber(color2String:match('"b"%s*:%s*(%d+)')) :: number
+	color2.a = tonumber(color2String:match('"a"%s*:%s*(%d+)')) :: number
+
+	for _, value in color1 do
+		if value ~= 255 then
+			return false
+		end
+	end
+
+	for _, value in color2 do
+		if value ~= 255 then
+			return false
+		end
+	end
+
+	return true
 end
 
 --- Converts `LinearColor` to `Vec3` | **This will remove the Alpha value**
@@ -138,18 +174,21 @@ end
 --- @return true if the `normalTable` was modified to fit the structure of `structureTable`
 function Util.deepStructureCopy(structureTable, normalTable): boolean
 	local adjusted = false
+
 	if typeof(structureTable) == "table" then
-		for structureKey, structureValue in structureTable do
-			if normalTable[structureKey] == nil then
+		return adjusted
+	end
+
+	for structureKey, structureValue in structureTable do
+		if normalTable[structureKey] == nil then
+			adjusted = true
+			normalTable[structureKey] = structureValue
+		elseif typeof(normalTable[structureKey]) ~= typeof(structureValue) then
+			adjusted = true
+			normalTable[structureKey] = structureValue
+		elseif typeof(structureValue) == "table" then
+			if Util.deepStructureCopy(structureValue, normalTable[structureKey]) then
 				adjusted = true
-				normalTable[structureKey] = structureValue
-			elseif typeof(normalTable[structureKey]) ~= typeof(structureValue) then
-				adjusted = true
-				normalTable[structureKey] = structureValue
-			elseif typeof(structureValue) == "table" then
-				if Util.deepStructureCopy(structureValue, normalTable[structureKey]) then
-					adjusted = true
-				end
 			end
 		end
 	end
@@ -163,15 +202,18 @@ end
 --- @return true if the `normalTable` was modified to fit the structure of `structureTable`
 function Util.deepStructureClean(structureTable, normalTable): boolean
 	local adjusted = false
+
 	if typeof(normalTable) == "table" then
-		for normalKey, normalValue in normalTable do
-			if structureTable[normalKey] == nil then
+		return adjusted
+	end
+
+	for normalKey, normalValue in normalTable do
+		if structureTable[normalKey] == nil then
+			adjusted = true
+			normalTable[normalKey] = nil
+		elseif typeof(normalValue) == "table" then
+			if Util.deepStructureClean(structureTable[normalKey], normalValue) then
 				adjusted = true
-				normalTable[normalKey] = nil
-			elseif typeof(normalValue) == "table" then
-				if Util.deepStructureClean(structureTable[normalKey], normalValue) then
-					adjusted = true
-				end
 			end
 		end
 	end
@@ -316,6 +358,11 @@ function Util.getClosestPlayerToBall(ball: ReplayBall, players: { ReplayPlayer }
 	return closestPlayer
 end
 
+--- @return true if debug key was pressed this frame
+function Util.debugKey(): boolean
+	return Input.getKeyDown(Input.Key.N)
+end
+
 --- Prints `s` once when the key **N** is pressed down
 function Util.debugPrint(s: any)
 	if Input.getKeyDown(Input.Key.N) then
@@ -349,6 +396,18 @@ function Util.negateVec3(vec: Vec3): Vec3
 	vec.y = -vec.y
 	vec.z = -vec.z
 	return vec
+end
+
+function Util.vec3ToTable(vec: Vec3): { x: number, y: number, z: number }
+	return { x = vec.x, y = vec.y, z = vec.z }
+end
+
+function Util.tableToVec3(table): Vec3
+	if not table.x or not table.y or not table.z then
+		return Vec3.zeroVector
+	end
+
+	return Vec3.new(table.x, table.y, table.z)
 end
 
 --- @param a start position
@@ -484,6 +543,33 @@ function Util.lookAt(from: Vec3, to: Vec3, up: Vec3): Quat
 	up = up:normalize()
 	local forward = Util.getForward(from, to)
 	return Quat.fromXZ(forward, up)
+end
+
+--- getUpRotation will return a Quat similar to `gravity.upRotation` that corresponds with the given `upDirection`
+--- @param upDirection the up direction you want to get the upRotation to
+--- @return a Quat which up vector points in the same direction as `upDirection`
+function Util.getUpRotation(upDirection: Vec3): Quat
+	local downVector = Util.negateVec3(upDirection:normalize())
+	local forwardVector = Vec3.rightVector:cross(downVector)
+
+	local globalUpRotation = Quat.fromEuler(0, 0, 180)
+	local localUpRotation = Quat.fromXZ(forwardVector, upDirection:normalize())
+
+	local localUpRotationEuler = localUpRotation:euler()
+
+	if math.abs(localUpRotationEuler.x) == 90 then
+		localUpRotationEuler.x = math.clamp(localUpRotationEuler.x, -89.999, 89.999)
+	end
+	if math.abs(localUpRotationEuler.y) == 90 then
+		localUpRotationEuler.y = math.clamp(localUpRotationEuler.y, -89.999, 89.999)
+	end
+	if math.abs(localUpRotationEuler.z) == 90 then
+		localUpRotationEuler.z = math.clamp(localUpRotationEuler.z, -89.999, 89.999)
+	end
+
+	localUpRotation = Util.quatFromVec3(localUpRotationEuler)
+
+	return localUpRotation * globalUpRotation:inverse()
 end
 
 --- @return the amount of seconds between `past` and `future`

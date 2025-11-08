@@ -6,6 +6,7 @@ type BoxType = typeof(Box)
 local Util = require("util")
 
 export type ArenaTeam<T = {}> = {
+	teamIndex: number,
 	previousScore: number,
 	score: number,
 	scoreIncrease: boolean,
@@ -100,6 +101,7 @@ function Arena.new(gamemode: ModuleStateSpectatorLuaApi, frameIndex: number): Ar
 	self.players = {}
 
 	self.home = {
+		teamIndex = Util.TeamIndex.HomeTeam,
 		previousScore = 0,
 		score = 0,
 		scoreIncrease = false,
@@ -117,6 +119,7 @@ function Arena.new(gamemode: ModuleStateSpectatorLuaApi, frameIndex: number): Ar
 	}
 
 	self.away = {
+		teamIndex = Util.TeamIndex.AwayTeam,
 		previousScore = 0,
 		score = 0,
 		scoreIncrease = false,
@@ -150,11 +153,15 @@ function Arena:getArenaBall()
 	for i in balls do
 		local ball = balls[i]
 
+		if not Util.isArenaBall(ball) then
+			continue
+		end
+
 		if not self.box:checkPointIntersect(ball.transform.position) then
 			continue
 		end
 		local distance = Util.getDist(self.transform.position, ball.transform.position)
-		if distance < closestBallDistance and Util.getBallType(ball:toJson()) ~= 2 then
+		if distance < closestBallDistance then
 			closestBallDistance = distance
 			clostestBall = ball
 		end
@@ -182,11 +189,11 @@ function Arena:tick()
 		self.isKickoff = true
 	end
 
-	local started = self.isGameActive and not self.lastIsGameActive
+	local isStarting = self.isGameActive and not self.lastIsGameActive
 
-	if started and self.home.roundsWon == 0 and self.away.roundsWon == 0 then
+	if isStarting and self.home.roundsWon == 0 and self.away.roundsWon == 0 then
 		self:onGameStart()
-	elseif started then
+	elseif isStarting then
 		self:onRoundStart()
 	end
 
@@ -217,7 +224,7 @@ function Arena:tick()
 		self.isGracePeriod = false
 	end
 
-	if self.gameTimeSeconds > self.lastGameTimeSeconds and not self.isOvertime then
+	if not isStarting and self.gameTimeSeconds > self.lastGameTimeSeconds and not self.isOvertime then
 		self.isOvertime = true
 	end
 
@@ -245,7 +252,7 @@ function Arena:tick()
 	self.away.previousScore = self.away.score
 	self.away.score = self.gamemode:getTeamScore(Util.TeamIndex.AwayTeam)
 
-	if self.instantUpdate then
+	if self.instantUpdate or isStarting then
 		self.home.previousScore = self.home.score
 		self.away.previousScore = self.away.score
 		self.lastGameTimeSeconds = self.gameTimeSeconds
@@ -256,6 +263,8 @@ function Arena:tick()
 
 	if self.home.scoreIncrease or self.away.scoreIncrease then
 		local teamIndex = self.home.scoreIncrease and Util.TeamIndex.HomeTeam or Util.TeamIndex.AwayTeam
+		self.gracePeriodStartTime = os.clock()
+		self.isGracePeriod = true
 		if self.onGoalScoredHook then
 			self:onGoalScoredHook(teamIndex)
 		end
