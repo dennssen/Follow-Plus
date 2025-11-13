@@ -2846,6 +2846,8 @@ type MessageValues = {
 	gestureSettingsCallback: (() -> ()) -> ()?,
 	autoShootingSettingsCallback: (() -> ()) -> ()?,
 	goalCamSettingsCallback: (() -> ()) -> ()?,
+	getTargetPlayerCallback: (() -> ReplayPlayer?) -> ()?,
+	getFollowValuesCallback: (() -> FollowValues) -> ()?,
 	readLocation: number?,
 	showNameTags: boolean?,
 	isLeftHanded: boolean?,
@@ -2874,6 +2876,72 @@ type MessageValues = {
 	showQuests: boolean?,
 	autoRecordReplays: boolean?,
 }
+
+type FollowValues = {
+	readLocation: number,
+	showNameTags: boolean,
+	isLeftHanded: boolean,
+	muteSelf: boolean,
+	targetPlayerName: string,
+	positionSmoothing: number,
+	rotationSmoothing: number,
+	cameraFOV: number,
+	cameraMode: number,
+	radius: number,
+	threshold: number,
+	cameraPositionOffset: Vec3,
+	cameraEulerOffset: Vec3,
+	gestureControls: boolean,
+	forwardGestureMode: number,
+	upGestureMode: number,
+	backwardsGestureMode: number,
+	autoBall: boolean,
+	simResolutionScale: number,
+	simTimeLength: number,
+	autoGoalCam: boolean,
+	ballGoalMode: number,
+	goalMode: number,
+	hideNearestHead: boolean,
+	showQuests: boolean,
+	autoRecordReplays: boolean,
+}
+
+function getTargetPlayer(): ReplayPlayer?
+	return targetPlayer
+end
+
+function getFollowValues(): FollowValues
+	local values: FollowValues = {
+		readLocation = readLocation,
+		showNameTags = showNameTags,
+		isLeftHanded = isLeftHanded,
+		muteSelf = muteSelf,
+		targetPlayerName = targetPlayerName,
+		positionSmoothing = positionSmoothing,
+		rotationSmoothing = rotationSmoothing,
+		cameraFOV = cameraFOV,
+		cameraMode = cameraMode,
+		radius = radius,
+		threshold = threshold,
+		cameraPositionOffset = cameraPositionOffset,
+		cameraEulerOffset = cameraEulerOffset,
+		gestureControls = gestureControls,
+		forwardGestureMode = forwardGestureMode,
+		upGestureMode = upGestureMode,
+		backwardsGestureMode = backwardsGestureMode,
+		autoBall = autoBall,
+		simResolutionScale = BallSim.resolutionScale,
+		simTimeLength = BallSim.pathLengthSeconds,
+		autoGoalCam = autoGoalCam,
+		ballGoalMode = ballGoalMode,
+		goalMode = goalMode,
+		hideNearestHead = camera.hideNearestHead,
+		showQuests = showQuests,
+		autoRecordReplays = autoRecordReplays,
+	}
+
+	return values
+end
 
 function onMessageReceived(messageTable: MessageValues)
 	-- only accept tables
@@ -2936,6 +3004,14 @@ function onMessageReceived(messageTable: MessageValues)
 	end
 	if messageTable.goalCamSettingsCallback ~= nil then
 		messageTable.goalCamSettingsCallback(goalCamSettings)
+	end
+
+	-- getTargetPlayerCallback is a callback that accepts the getTargetPlayer function as a parameter. This allows addon scripts to access the targeted player obtained by follow+.
+	if messageTable.getTargetPlayerCallback ~= nil then
+		messageTable.getTargetPlayerCallback(getTargetPlayer)
+	end
+	if messageTable.getFollowValuesCallback ~= nil then
+		messageTable.getFollowValuesCallback(getFollowValues)
 	end
 	-- readLocation is a number representing where to retrive data from, anything above 0 is a replay file. Trying to access a replay file that doesn't exist does nothing.
 	if messageTable.readLocation then

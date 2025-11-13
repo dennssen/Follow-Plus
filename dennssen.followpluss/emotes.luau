@@ -66,7 +66,6 @@ Emotes.animationCycleSpeed = 1
 
 function Emotes:tick()
 	local currentTime: number = os.clock()
-	Util.debugPrint(currentTime)
 	if currentTime > lastAnimationCycle + Emotes.animationCycleSpeed then
 		for _, emote: Emote in Emotes.emoteList do
 			emote:nextFrame()
