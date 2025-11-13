@@ -1179,8 +1179,9 @@ function setArena(_arena: FollowArena)
 	end
 end
 
-function onGui()
-	Gui.text("Version: " .. _version)
+-- GUI
+
+function topSettings()
 	local readLocationString = ""
 	if readLocation > 0 then
 		readLocationString = "Replay " .. readLocation
@@ -1199,8 +1200,6 @@ function onGui()
 		Gui.endCombo()
 	end
 	Gui.setItemTooltip("Where the camera gets the game data from.")
-
-	local frame = Util.getReplayFrameFromIndex(readLocation)
 
 	if Gui.beginCombo("Profile", lastUsedProfile) then
 		local defaultKey = Util.getDictKey(config.profiles["default"], config.profiles)
@@ -1232,7 +1231,9 @@ function onGui()
 	Emotes:selectEmoteGUI("Emote")
 
 	Gui.newLine()
+end
 
+function checkboxSettings()
 	showNameTags = Gui.checkbox(generateAsterisk(nametagsLabel, showNameTags ~= profile.showNameTags), showNameTags)
 	Gui.setItemTooltip("Enable or disable nametags for all players")
 
@@ -1267,7 +1268,9 @@ function onGui()
 	--[[Gui.sameLine()
 	focusedArena = Gui.checkbox(generateAsterisk(focusedArenaLabel, focusedArena ~= profile.focusedArena), focusedArena)
 	Gui.setItemTooltip("Mutes all Players OUTSIDE of the Arena the Followed Player is currently in")]]
+end
 
+function playerSettings()
 	targetPlayerName = Gui.inputText(
 		generateAsterisk(targetPlayerNameLabel, targetPlayerName ~= profile.targetPlayerName),
 		targetPlayerName
@@ -1318,7 +1321,9 @@ function onGui()
 
 		Gui.unindent()
 	end
+end
 
+function cameraSettings()
 	cameraFOV = Gui.sliderInt(generateAsterisk(cameraFOVLabel, cameraFOV ~= profile.fieldOfView), cameraFOV, 40, 179)
 	Gui.setItemTooltip("The cameras field of view (FOV)")
 	cameraFOV = math.clamp(cameraFOV, 40, 179)
@@ -1332,7 +1337,82 @@ function onGui()
 	positionSmoothing = math.clamp(positionSmoothing, 0, 1)
 	Gui.setItemTooltip("The time it takes for the Camera to move from A to B")
 	Gui.newLine()
+end
 
+function gestureSettings()
+	local gestureHeaderAsterisk = false
+	if
+		backwardsGestureMode ~= profile.backwardsGestureMode
+		or upGestureMode ~= profile.upGestureMode
+		or forwardGestureMode ~= profile.forwardGestureMode
+		or gestureControls ~= profile.gestureControls
+	then
+		gestureHeaderAsterisk = true
+	end
+	if Gui.collapsingHeader(generateAsterisk(gestureControlsHeaderLabel, gestureHeaderAsterisk)) then
+		Gui.indent()
+		gestureControls = Gui.checkbox(
+			generateAsterisk(gestureControlsLabel, gestureControls ~= profile.gestureControls) .. "##3",
+			gestureControls
+		)
+		Gui.setItemTooltip([[
+Be able to grab the camera and throw it to change modes
+	- Grab the camera with grip and trigger behind your head
+	- Let go without throwing for First Person]])
+		if gestureControls then
+			if
+				Gui.beginCombo(
+					generateAsterisk(forwardGestureModeLabel, forwardGestureMode ~= profile.forwardGestureMode),
+					gestureModes[forwardGestureMode - 1]
+				)
+			then
+				for i = 1, #gestureModes do
+					if Gui.selectable(gestureModes[i], i == forwardGestureMode - 1) then
+						forwardGestureMode = i + 1
+					end
+				end
+				Gui.endCombo()
+			end
+			forwardGestureMode = math.clamp(forwardGestureMode, 1, #cameraModes)
+			Gui.setItemTooltip("What Mode to change to when Throwing the Camera forward")
+
+			if
+				Gui.beginCombo(
+					generateAsterisk(upGestureModeLabel, upGestureMode ~= profile.upGestureMode),
+					gestureModes[upGestureMode - 1]
+				)
+			then
+				for i = 1, #gestureModes do
+					if Gui.selectable(gestureModes[i], i == upGestureMode - 1) then
+						upGestureMode = i + 1
+					end
+				end
+				Gui.endCombo()
+			end
+			upGestureMode = math.clamp(upGestureMode, 1, #cameraModes)
+			Gui.setItemTooltip("What Mode to change to when Throwing the Camera up")
+
+			if
+				Gui.beginCombo(
+					generateAsterisk(backwardsGestureModeLabel, backwardsGestureMode ~= profile.backwardsGestureMode),
+					gestureModes[backwardsGestureMode - 1]
+				)
+			then
+				for i = 1, #gestureModes do
+					if Gui.selectable(gestureModes[i], i == backwardsGestureMode - 1) then
+						backwardsGestureMode = i + 1
+					end
+				end
+				Gui.endCombo()
+			end
+			backwardsGestureMode = math.clamp(backwardsGestureMode, 1, #cameraModes)
+			Gui.setItemTooltip("What Mode to change to when Throwing the Camera backward")
+		end
+		Gui.unindent()
+	end
+end
+
+function followSettings()
 	Gui.indent()
 	Gui.separatorText("Settings")
 
@@ -1407,85 +1487,18 @@ function onGui()
 	if cameraMode == CameraMode.VelocityRotation or cameraMode == CameraMode.FaceTheBall then
 		Gui.endDisabled()
 	end
+end
+
+function mainSettings()
+	followSettings()
 
 	Gui.newLine()
+	gestureSettings()
 
-	local gestureHeaderAsterisk = false
-	if
-		backwardsGestureMode ~= profile.backwardsGestureMode
-		or upGestureMode ~= profile.upGestureMode
-		or forwardGestureMode ~= profile.forwardGestureMode
-		or gestureControls ~= profile.gestureControls
-	then
-		gestureHeaderAsterisk = true
-	end
-	if Gui.collapsingHeader(generateAsterisk(gestureControlsHeaderLabel, gestureHeaderAsterisk)) then
-		Gui.indent()
-		gestureControls = Gui.checkbox(
-			generateAsterisk(gestureControlsLabel, gestureControls ~= profile.gestureControls) .. "##3",
-			gestureControls
-		)
-		Gui.setItemTooltip([[
-Be able to grab the camera and throw it to change modes
-	- Grab the camera with grip and trigger behind your head
-	- Let go without throwing for First Person]])
-		if gestureControls then
-			if
-				Gui.beginCombo(
-					generateAsterisk(forwardGestureModeLabel, forwardGestureMode ~= profile.forwardGestureMode),
-					gestureModes[forwardGestureMode - 1]
-				)
-			then
-				for i = 1, #gestureModes do
-					if Gui.selectable(gestureModes[i], i == forwardGestureMode - 1) then
-						forwardGestureMode = i + 1
-					end
-				end
-				Gui.endCombo()
-			end
-			forwardGestureMode = math.clamp(forwardGestureMode, 1, #cameraModes)
-			Gui.setItemTooltip("What Mode to change to when Throwing the Camera forward")
+	Gui.unindent()
+end
 
-			if
-				Gui.beginCombo(
-					generateAsterisk(upGestureModeLabel, upGestureMode ~= profile.upGestureMode),
-					gestureModes[upGestureMode - 1]
-				)
-			then
-				for i = 1, #gestureModes do
-					if Gui.selectable(gestureModes[i], i == upGestureMode - 1) then
-						upGestureMode = i + 1
-					end
-				end
-				Gui.endCombo()
-			end
-			upGestureMode = math.clamp(upGestureMode, 1, #cameraModes)
-			Gui.setItemTooltip("What Mode to change to when Throwing the Camera up")
-
-			if
-				Gui.beginCombo(
-					generateAsterisk(backwardsGestureModeLabel, backwardsGestureMode ~= profile.backwardsGestureMode),
-					gestureModes[backwardsGestureMode - 1]
-				)
-			then
-				for i = 1, #gestureModes do
-					if Gui.selectable(gestureModes[i], i == backwardsGestureMode - 1) then
-						backwardsGestureMode = i + 1
-					end
-				end
-				Gui.endCombo()
-			end
-			backwardsGestureMode = math.clamp(backwardsGestureMode, 1, #cameraModes)
-			Gui.setItemTooltip("What Mode to change to when Throwing the Camera backward")
-		end
-		Gui.unindent()
-	end
-
-	-- check for changes in the collapsing header
-
-	Gui.newLine()
-	Gui.separatorText("Auto Cameras")
-
+function autoShootingSettings()
 	local autoShootingCameraAsterisk = false
 	if autoBall ~= profile.autoBall or ballGoalMode ~= profile.ballGoalMode then
 		autoShootingCameraAsterisk = true
@@ -1536,9 +1549,9 @@ Be able to grab the camera and throw it to change modes
 		end
 		Gui.unindent()
 	end
+end
 
-	Gui.newLine()
-
+function goalCamSettings()
 	local goalCameraAsterisk = false
 	if autoGoalCam ~= profile.autoGoalCam or goalMode ~= profile.goalMode or distanceLerp ~= profile.distanceLerp then
 		goalCameraAsterisk = true
@@ -1572,10 +1585,24 @@ Be able to grab the camera and throw it to change modes
 
 		Gui.unindent()
 	end
+end
+
+function autoCameraSettings()
+	Gui.newLine()
+	Gui.indent()
+	Gui.separatorText("Auto Cameras")
+
+	autoShootingSettings()
+
+	Gui.newLine()
+
+	goalCamSettings()
 
 	Gui.unindent()
 	Gui.newLine()
+end
 
+function savingSettings()
 	if confirmationText ~= "" then
 		Gui.text(confirmationText)
 	end
@@ -1710,8 +1737,10 @@ Be able to grab the camera and throw it to change modes
 	end
 
 	Gui.newLine()
-	Gui.separator()
+end
 
+function debugSettings()
+	Gui.separator()
 	if Gui.treeNode("Debug") then
 		Gui.indent()
 		Gui.separatorText("Info")
@@ -1813,6 +1842,25 @@ Be able to grab the camera and throw it to change modes
 		Gui.unindent()
 		Gui.treePop()
 	end
+end
+
+function onGui()
+	Gui.text("Version: " .. _version)
+	topSettings()
+
+	checkboxSettings()
+
+	playerSettings()
+
+	cameraSettings()
+
+	mainSettings()
+
+	autoCameraSettings()
+
+	savingSettings()
+
+	debugSettings()
 end
 
 function toggleSmoothing(position: boolean, rotation: boolean)
@@ -2785,7 +2833,19 @@ end
 
 type MessageValues = {
 	versionCallback: (string) -> ()?,
-	callback: (() -> ()) -> ()?,
+	guiCallback: (() -> ()) -> ()?,
+	topSettingsCallback: (() -> ()) -> ()?,
+	checkboxSettingsCallback: (() -> ()) -> ()?,
+	playerSettingsCallback: (() -> ()) -> ()?,
+	cameraSettingsCallback: (() -> ()) -> ()?,
+	followSettingsCallback: (() -> ()) -> ()?,
+	mainSettingsCallback: (() -> ()) -> ()?,
+	autoCameraSettingsCallback: (() -> ()) -> ()?,
+	savingSettingsCallback: (() -> ()) -> ()?,
+	debugSettingsCallback: (() -> ()) -> ()?,
+	gestureSettingsCallback: (() -> ()) -> ()?,
+	autoShootingSettingsCallback: (() -> ()) -> ()?,
+	goalCamSettingsCallback: (() -> ()) -> ()?,
 	readLocation: number?,
 	showNameTags: boolean?,
 	isLeftHanded: boolean?,
@@ -2835,9 +2895,47 @@ function onMessageReceived(messageTable: MessageValues)
 	if messageTable.versionCallback ~= nil then
 		messageTable.versionCallback(_version)
 	end
-	-- callback is a function that takes this cameras GUI as a parameter to receive for the messenger. This is usefull for displaying the same GUI in multiple cameras.
-	if messageTable.callback ~= nil then
-		messageTable.callback(onGui)
+	-- callback is a function that takes some part of this cameras GUI as a parameter to receive for the messenger. This is usefull for displaying the same GUI in multiple cameras.
+	-- some gui functions are inside others, like for instance the gestureSettings and followSettings being a part of mainSettings. They are seperated to make it easier to only display 1 of them.
+	-- if you only wanted 1 or some of the Gui elements inside a function you can then reacreate the Gui yourself and overwrite the values through messaging.
+	if messageTable.guiCallback ~= nil then
+		messageTable.guiCallback(onGui)
+	end
+	if messageTable.topSettingsCallback ~= nil then
+		messageTable.topSettingsCallback(topSettings)
+	end
+	if messageTable.checkboxSettingsCallback ~= nil then
+		messageTable.checkboxSettingsCallback(checkboxSettings)
+	end
+	if messageTable.playerSettingsCallback ~= nil then
+		messageTable.playerSettingsCallback(playerSettings)
+	end
+	if messageTable.cameraSettingsCallback ~= nil then
+		messageTable.cameraSettingsCallback(cameraSettings)
+	end
+	if messageTable.mainSettingsCallback ~= nil then
+		messageTable.mainSettingsCallback(mainSettings)
+	end
+	if messageTable.autoCameraSettingsCallback ~= nil then
+		messageTable.autoCameraSettingsCallback(autoCameraSettings)
+	end
+	if messageTable.savingSettingsCallback ~= nil then
+		messageTable.savingSettingsCallback(savingSettings)
+	end
+	if messageTable.debugSettingsCallback ~= nil then
+		messageTable.debugSettingsCallback(debugSettings)
+	end
+	if messageTable.gestureSettingsCallback ~= nil then
+		messageTable.gestureSettingsCallback(gestureSettings)
+	end
+	if messageTable.followSettingsCallback ~= nil then
+		messageTable.followSettingsCallback(followSettings)
+	end
+	if messageTable.autoShootingSettingsCallback ~= nil then
+		messageTable.autoShootingSettingsCallback(autoShootingSettings)
+	end
+	if messageTable.goalCamSettingsCallback ~= nil then
+		messageTable.goalCamSettingsCallback(goalCamSettings)
 	end
 	-- readLocation is a number representing where to retrive data from, anything above 0 is a replay file. Trying to access a replay file that doesn't exist does nothing.
 	if messageTable.readLocation then
