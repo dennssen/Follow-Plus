@@ -1007,21 +1007,6 @@ local releaseTimers = {
 local maxGrabTime: number = 0.25
 local maxLetGoTime: number = 1
 
-local HandPose = {
-	Neutral = 0, -- Doesn't work
-	Flat = 1, -- Hand on ground and not grabbing
-	Closed = 2, -- Doesn't work
-	GrabBall = 3, -- Hold ball
-	Horns = 4, -- Doesn't work
-	OK = 5, -- Doesn't work
-	Peace = 6, -- Doesn't work
-	Point = 7, -- Doesn't work
-	Shaka = 8, -- Doesn't work
-	ThumbsUp = 9, -- Doesn't work
-	FingerGun = 10, -- Doesn't work
-	MAX = 11, -- When not Flat or Holding ball
-}
-
 -- radius
 local radius = profile.radius
 local threshold = profile.threshold
@@ -1760,6 +1745,26 @@ function debugSettings()
 			Gui.text("Player Velocity: " .. tostring(playerVelocity))
 			Gui.text("Is Local Player: " .. tostring(isLocalPlayer))
 			Gui.text("Team Index: " .. tostring(teamIndex))
+			if targetPlayer and Gui.treeNode("Left Hand Poses") then
+				local leftHandPoses = Util.decodePoseBits(targetPlayer.leftHandPosebits)
+
+				Gui.text(`Thumb Down: {leftHandPoses.ThumbDown}`)
+				Gui.text(`Trigger Down: {leftHandPoses.TriggerDown}`)
+				Gui.text(`Trigger Point: {leftHandPoses.TriggerPoint}`)
+				Gui.text(`Grip Down: {leftHandPoses.GripDown}`)
+				Gui.text(`Full Hand Pose Override: {Util.fullHandPoseToString(leftHandPoses.FullHandPoseOverride)}`)
+				Gui.treePop()
+			end
+			if targetPlayer and Gui.treeNode("Right Hand Poses") then
+				local rightHandPoses = Util.decodePoseBits(targetPlayer.rightHandPosebits)
+
+				Gui.text(`Thumb Down: {rightHandPoses.ThumbDown}`)
+				Gui.text(`Trigger Down: {rightHandPoses.TriggerDown}`)
+				Gui.text(`Trigger Point: {rightHandPoses.TriggerPoint}`)
+				Gui.text(`Grip Down: {rightHandPoses.GripDown}`)
+				Gui.text(`Full Hand Pose Override: {Util.fullHandPoseToString(rightHandPoses.FullHandPoseOverride)}`)
+				Gui.treePop()
+			end
 			Gui.treePop()
 		end
 		if Gui.treeNode("Ball") then
@@ -1874,16 +1879,6 @@ function toggleSmoothing(position: boolean, rotation: boolean)
 	else
 		cameraRotationSmoothing = 0
 	end
-end
-
-function decodePoseBits(poseBits)
-	return {
-		ThumbDown = bit32.band(poseBits, 1) ~= 0, -- True if thumb on face of controller (Touch sensor)
-		TriggerDown = bit32.band(poseBits, bit32.lshift(1, 1)) ~= 0, -- True if Trigger is pressed down
-		TriggerPoint = bit32.band(poseBits, bit32.lshift(1, 2)) ~= 0, -- True if finger is not on trigger (Touch sensor)
-		GripDown = bit32.band(poseBits, bit32.lshift(1, 3)) ~= 0, -- True if Grip is pressed down
-		FullHandPoseOverride = bit32.rshift(poseBits, 4) % 16,
-	}
 end
 
 function getClosestArena(
@@ -2003,16 +1998,16 @@ end
 
 function isGrabbingCamera(player: ReplayPlayer): Transform?
 	local leftHandPosition = player.root.position + player.root.rotation:rotateVector(player.leftHand.position)
-	local leftPoseFlags = decodePoseBits(player.leftHandPosebits)
+	local leftPoseFlags = Util.decodePoseBits(player.leftHandPosebits)
 	local rightHandPosition = player.root.position + player.root.rotation:rotateVector(player.rightHand.position)
-	local rightPoseFlags = decodePoseBits(player.rightHandPosebits)
+	local rightPoseFlags = Util.decodePoseBits(player.rightHandPosebits)
 
 	-- Left hand grab logic
 	if
 		not leftHandGrabbing
 		and leftPoseFlags.GripDown
 		and leftPoseFlags.TriggerDown
-		and leftPoseFlags.FullHandPoseOverride ~= HandPose.GrabBall
+		and leftPoseFlags.FullHandPoseOverride ~= Util.HandPose.GrabBall
 	then
 		if
 			(cameraMode == CameraMode.HandHeld and isLeftHanded and not isFollowingBall and not cameraInGoal)
@@ -2074,7 +2069,7 @@ function isGrabbingCamera(player: ReplayPlayer): Transform?
 		not rightHandGrabbing
 		and rightPoseFlags.GripDown
 		and rightPoseFlags.TriggerDown
-		and rightPoseFlags.FullHandPoseOverride ~= HandPose.GrabBall
+		and rightPoseFlags.FullHandPoseOverride ~= Util.HandPose.GrabBall
 	then
 		if
 			(cameraMode == CameraMode.HandHeld and not isLeftHanded and not isFollowingBall and not cameraInGoal)
@@ -2377,8 +2372,8 @@ function checkFlip(rightHandTransform: Transform, rightHandPosebits, leftHandTra
 		return
 	end
 
-	local leftHandPose = decodePoseBits(leftHandPosebits)
-	local rightHandPose = decodePoseBits(rightHandPosebits)
+	local leftHandPose = Util.decodePoseBits(leftHandPosebits)
+	local rightHandPose = Util.decodePoseBits(rightHandPosebits)
 
 	local leftHandVelocity = leftHandTransform.position - previousLeftHandPosition
 	local rightHandVelocity = rightHandTransform.position - previousRightHandPosition
