@@ -2841,7 +2841,7 @@ type MessageValues = {
 	autoShootingSettingsCallback: (() -> ()) -> ()?,
 	goalCamSettingsCallback: (() -> ()) -> ()?,
 	getTargetPlayerCallback: (() -> ReplayPlayer?) -> ()?,
-	getFollowValuesCallback: (() -> FollowValues) -> ()?,
+	getArenaCallback: (() -> FollowArena) -> ()?,
 	readLocation: number?,
 	showNameTags: boolean?,
 	isLeftHanded: boolean?,
@@ -2854,8 +2854,8 @@ type MessageValues = {
 	cameraMode: number?,
 	radius: number?,
 	threshold: number?,
-	cameraPositionOffset: string?,
-	cameraEulerOffset: string?,
+	cameraPositionOffset: Vec3?,
+	cameraRotationOffset: Quat?,
 	gestureControls: boolean?,
 	forwardGestureMode: number?,
 	upGestureMode: number?,
@@ -2871,70 +2871,12 @@ type MessageValues = {
 	autoRecordReplays: boolean?,
 }
 
-type FollowValues = {
-	readLocation: number,
-	showNameTags: boolean,
-	isLeftHanded: boolean,
-	muteSelf: boolean,
-	targetPlayerName: string,
-	positionSmoothing: number,
-	rotationSmoothing: number,
-	cameraFOV: number,
-	cameraMode: number,
-	radius: number,
-	threshold: number,
-	cameraPositionOffset: Vec3,
-	cameraEulerOffset: Vec3,
-	gestureControls: boolean,
-	forwardGestureMode: number,
-	upGestureMode: number,
-	backwardsGestureMode: number,
-	autoBall: boolean,
-	simResolutionScale: number,
-	simTimeLength: number,
-	autoGoalCam: boolean,
-	ballGoalMode: number,
-	goalMode: number,
-	hideNearestHead: boolean,
-	showQuests: boolean,
-	autoRecordReplays: boolean,
-}
-
 function getTargetPlayer(): ReplayPlayer?
 	return targetPlayer
 end
 
-function getFollowValues(): FollowValues
-	local values: FollowValues = {
-		readLocation = readLocation,
-		showNameTags = showNameTags,
-		isLeftHanded = isLeftHanded,
-		muteSelf = muteSelf,
-		targetPlayerName = targetPlayerName,
-		positionSmoothing = positionSmoothing,
-		rotationSmoothing = rotationSmoothing,
-		cameraFOV = cameraFOV,
-		cameraMode = cameraMode,
-		radius = radius,
-		threshold = threshold,
-		cameraPositionOffset = cameraPositionOffset,
-		cameraEulerOffset = cameraEulerOffset,
-		gestureControls = gestureControls,
-		forwardGestureMode = forwardGestureMode,
-		upGestureMode = upGestureMode,
-		backwardsGestureMode = backwardsGestureMode,
-		autoBall = autoBall,
-		simResolutionScale = BallSim.resolutionScale,
-		simTimeLength = BallSim.pathLengthSeconds,
-		autoGoalCam = autoGoalCam,
-		ballGoalMode = ballGoalMode,
-		goalMode = goalMode,
-		hideNearestHead = camera.hideNearestHead,
-		showQuests = showQuests,
-		autoRecordReplays = autoRecordReplays,
-	}
-
-	return values
+function getArena(): FollowArena
+	return arena
 end
 
 function onMessageReceived(messageTable: MessageValues)
@@ -3004,8 +2946,8 @@ function onMessageReceived(messageTable: MessageValues)
 	if messageTable.getTargetPlayerCallback ~= nil then
 		messageTable.getTargetPlayerCallback(getTargetPlayer)
 	end
-	if messageTable.getFollowValuesCallback ~= nil then
-		messageTable.getFollowValuesCallback(getFollowValues)
+	if messageTable.getArenaCallback ~= nil then
+		messageTable.getArenaCallback(getArena)
 	end
 	-- readLocation is a number representing where to retrive data from, anything above 0 is a replay file. Trying to access a replay file that doesn't exist does nothing.
 	if messageTable.readLocation then
@@ -3048,7 +2990,7 @@ function onMessageReceived(messageTable: MessageValues)
 		positionSmoothing = messageTable.positionSmoothing
 		cameraPositionSmoothing = positionSmoothing
 	end
-	-- positionSmoothing is a number that sets the cameras rotation smoothing, the number can be set between 0.000 and 1.000
+	-- rotationSmoothing is a number that sets the cameras rotation smoothing, the number can be set between 0.000 and 1.000
 	if messageTable.rotationSmoothing then
 		rotationSmoothing = messageTable.rotationSmoothing
 		cameraRotationSmoothing = rotationSmoothing
@@ -3068,11 +3010,11 @@ function onMessageReceived(messageTable: MessageValues)
 	end
 	-- cameraPositionOffset is a Vec3 that adds a positional offset to the First Person and Head Rotation camera modes. The positional offset only takes affect when in First Person or Head Rotation mode.
 	if messageTable.cameraPositionOffset then
-		cameraPositionOffset = stringToVec3(messageTable.cameraPositionOffset)
+		cameraPositionOffset = messageTable.cameraPositionOffset
 	end
 	-- cameraEulerOffset is a Vec3 that adds a rotational offset to the First Person and Head Rotation camera modes. The rotational offset only takes affect when in First Person or Head Rotation mode.
-	if messageTable.cameraEulerOffset then
-		cameraEulerOffset = stringToVec3(messageTable.cameraEulerOffset)
+	if messageTable.cameraRotationOffset then
+		cameraEulerOffset = messageTable.cameraRotationOffset:euler()
 	end
 	-- gestureControls is a boolean that enables/disables gesture controlls which allow the player being followed to grab their camera and switch camera modes in game.
 	if messageTable.gestureControls ~= nil then
