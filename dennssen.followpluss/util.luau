@@ -1,5 +1,20 @@
 --!strict
 
+--[=[
+- `ThumbDown` True if thumb on face of controller (Touch sensor)
+- `TriggerDown` True if Trigger is pressed down
+- `TriggerPoint` True if finger is not on trigger (Touch sensor)
+- `GripDown` True if Grip is pressed down
+- `FullHandPoseOverride` see `Util.HandPose`
+]=]
+type HandPoses = {
+	ThumbDown: boolean,
+	TriggerDown: boolean,
+	TriggerPoint: boolean,
+	GripDown: boolean,
+	FullHandPoseOverride: number,
+}
+
 local Util = {}
 
 --- TeamIndex constants
@@ -10,6 +25,36 @@ Util.TeamIndex = {
 	NoTeam = -1,
 	HomeTeam = 0,
 	AwayTeam = 1,
+}
+
+--- HandPose constants
+--[=[
+- `Neutral` Doesn't work
+- `Flat` Hand on ground and not grabbing
+- `GrabBall` Hold a ball with grip
+- `HoldBackItem` Hold a back cosmetic
+- `Horns` Doesn't work
+- `OK` Doesn't work
+- `Peace` Doesn't work
+- `Point` Doesn't work
+- `Shaka` Doesn't work
+- `ThumbsUp` Doesn't work
+- `FingerGun` Doesn't work
+- `MAX` When not Flat or Holding ball
+]=]
+Util.HandPose = {
+	Neutral = 0,
+	Flat = 1,
+	GrabBall = 2,
+	HoldBackItem = 3,
+	Horns = 4,
+	OK = 5,
+	Peace = 6,
+	Point = 7,
+	Shaka = 8,
+	ThumbsUp = 9,
+	FingerGun = 10,
+	MAX = 11,
 }
 
 --- Toggle debug printing.
@@ -175,7 +220,7 @@ end
 function Util.deepStructureCopy(structureTable, normalTable): boolean
 	local adjusted = false
 
-	if typeof(structureTable) == "table" then
+	if typeof(structureTable) ~= "table" then
 		return adjusted
 	end
 
@@ -203,7 +248,7 @@ end
 function Util.deepStructureClean(structureTable, normalTable): boolean
 	local adjusted = false
 
-	if typeof(normalTable) == "table" then
+	if typeof(normalTable) ~= "table" then
 		return adjusted
 	end
 
@@ -294,15 +339,46 @@ function Util.getClosestBall(targetPosition: Vec3, frameData: ReplayFrame): Repl
 	return clostestBall
 end
 
+--- Converts the handPoseBits number into a HandPoses table
+function Util.decodePoseBits(handPoseBits: number): HandPoses
+	return {
+		ThumbDown = bit32.band(handPoseBits, 1) ~= 0,
+		TriggerDown = bit32.band(handPoseBits, bit32.lshift(1, 1)) ~= 0,
+		TriggerPoint = bit32.band(handPoseBits, bit32.lshift(1, 2)) ~= 0,
+		GripDown = bit32.band(handPoseBits, bit32.lshift(1, 3)) ~= 0,
+		FullHandPoseOverride = bit32.rshift(handPoseBits, 4) % 16,
+	}
+end
+
+--- @return The name of the active FullHandPoseOverride
+function Util.fullHandPoseToString(fullHandPoseOverride: number): string
+	local name: string = ""
+	for poseName: string, poseValue: number in Util.HandPose :: { [string]: number } do
+		if fullHandPoseOverride == poseValue then
+			name = poseName
+			break
+		end
+	end
+
+	if name == "" then
+		name = "Bad Hand Pose"
+	end
+
+	return name
+end
+
 --[=[
 Checks if a player is withing a reasonable distance of the ball with their hands or head
+
+**IMPORTANT:** This is meant for driftball and other gamemodes that use physical contact with the ball.
+For checking if a player is actually holding a ball like a Z-Drift ball use `isZDriftballHeld()`.
 
 *Note: the radius of a normal driftball is 17*
 
 @return the player holding the ball
 @return `nil` if no player is holding the ball
 ]=]
-function Util.isBallHeld(ball: ReplayBall, ballRadius: number, players: { ReplayPlayer }): ReplayPlayer?
+function Util.isDriftballHeld(ball: ReplayBall, ballRadius: number, players: { ReplayPlayer }): ReplayPlayer?
 	local closestPlayerDistance = math.huge
 	local closestPlayer: ReplayPlayer = nil
 
