@@ -2460,7 +2460,7 @@ function checkForBallFollow(player: ReplayPlayer)
 	if isFollowingBall then
 		local hasScored = arena.home.goal.box:checkPointIntersect(arena.ball.transform.position)
 			or arena.away.goal.box:checkPointIntersect(arena.ball.transform.position)
-		local isHeld = Util.isBallHeld(arena.ball, BallSim.radius, arena.players)
+		local isHeld = Util.isDriftballHeld(arena.ball, BallSim.radius, arena.players)
 		local notInGoal = not isInGoalInfo.home and not isInGoalInfo.away
 		local stopFollow = (notInGoal or hasScored or isHeld) and os.clock() > followBallStart + minBallFollowTime
 
@@ -2487,7 +2487,7 @@ function checkForBallFollow(player: ReplayPlayer)
 		(ballGoalMode == BallGoalMode.EnemyGoal and oppositeGoal) or (ballGoalMode == BallGoalMode.BothGoals)
 	)
 	local isGoodShotDistance = Util.getDist(shotGoal.position, arena.ball.transform.position) > 1000
-	local isInAir = not Util.isBallHeld(arena.ball, BallSim.radius, arena.players)
+	local isInAir = not Util.isDriftballHeld(arena.ball, BallSim.radius, arena.players)
 	local isGoal = (isInGoalInfo.home or isInGoalInfo.away) and isCorrectGoal and isGoodShotDistance and isInAir
 
 	if isGoal then
