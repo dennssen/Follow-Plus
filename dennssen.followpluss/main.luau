@@ -896,11 +896,17 @@ local arenas: { [any]: FollowArena }
 
 function tryGetArenas()
 	if cachedGamemodeAmount ~= #SpectatorGamemodes.listGamemodeIds() then
+		cachedGamemodeAmount = #SpectatorGamemodes.listGamemodeIds()
 		arenas = getArenas()
-		if Util.getDictSize(arenas) > 0 then
+		if Util.getDictSize(arenas) == 0 then
+			return
+		end
+
+		if targetPlayer then
+			setArena(getClosestArena(targetPlayer.root.position))
+		else
 			setArena(Util.getDictIndex(arenas, 1))
 		end
-		cachedGamemodeAmount = #SpectatorGamemodes.listGamemodeIds()
 	end
 end
 
@@ -1055,6 +1061,7 @@ function main()
 	camera.positionSmoothing = 0
 	camera.rotationSmoothing = 0
 	arenas = getArenas()
+	cachedGamemodeAmount = #SpectatorGamemodes.listGamemodeIds()
 end
 
 function onTransitionBegin()
@@ -1120,7 +1127,9 @@ function setTargetPlayer(player: ReplayPlayer?)
 	targetPlayer = player
 	targetPlayerName = player.playerName
 	teamIndex = player.teamIndex
-	setArena(getClosestArena(player.root.position))
+
+	local closestArena: FollowArena = getClosestArena(player.root.position)
+	setArena(closestArena)
 end
 
 function clearTargetPlayer()
