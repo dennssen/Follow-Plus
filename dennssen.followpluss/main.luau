@@ -27,6 +27,9 @@ type FollowArena = Arena<{}, GoalCamData, GoalCamData> & {
 	goalCam: (self: FollowArena, goalPosition: Vec3, goalRotation: Quat) -> (),
 }
 
+local HUD = require("hud")
+type HUD = HUD.HUD
+
 local BallSim = require("ballsim")
 
 local frame: ReplayFrame
@@ -942,6 +945,9 @@ local nextHandHeldRotationOffset: Quat = Quat.identity
 local handHeldRotationOffset: Quat = Quat.identity
 
 local gravityUpDirection: Vec3 = Vec3.zeroVector
+
+-- ball outline
+local ui: HUD = HUD.new("", 1920, 1080, 10)
 
 -- gui
 local listActive = false
@@ -2703,6 +2709,39 @@ function configureVOIP()
 	lastFocusedArena = focusedArena
 end
 
+function drawBallOutline(ball: ReplayBall)
+	ui:tick()
+
+	local ballHUDPosition: Vec2 = ui:worldToHUD(ball.transform.position)
+
+	if ballHUDPosition == Vec2.zeroVector then
+		return
+	end
+
+	local ballRadius = 17.5
+	local segments = 20
+	local radius = ui:getApparentLength(ballRadius, ball.transform.position)
+	local thickness = math.min(ui.depth / 100, radius / 1000)
+
+	local angleStep = (2 * math.pi) / segments
+	local prevPoint = nil
+
+	for i = 0, segments do
+		local angle = i * angleStep
+
+		local x = radius * math.cos(angle)
+		local y = radius * math.sin(angle)
+
+		local point: Vec2 = ballHUDPosition + Vec2.new(x, y)
+
+		if prevPoint then
+			ui:drawLine(prevPoint, point, Vec3.oneVector, thickness, 0)
+		end
+
+		prevPoint = point
+	end
+end
+
 function anchorCollision(anchorPosition: Vec3, anchorOffsetPosition: Vec3): Vec3
 	local anchor = anchorPosition + anchorOffsetPosition
 
@@ -2779,6 +2818,13 @@ function tick(dt)
 
 	tryGetArenas()
 
+	if followFreecam then
+		arena = Util.getDictIndex(arenas, 1)
+		arena:tick()
+		drawBallOutline(arena.ball)
+		return
+	end
+
 	if #frame.players == 0 then
 		noPlayerOrbit(dt)
 		return
@@ -2812,6 +2858,11 @@ function tick(dt)
 	updateBallData(ball, dt)
 	withPlayer(targetPlayer)
 	configureVOIP()
+
+	if targetPlayer.teamIndex ~= Util.TeamIndex.NoTeam then
+		drawBallOutline(ball)
+	end
+
 	previousCameraMode = activeCameraMode
 	previousTargetPlayerId = targetPlayer.playerId
 
