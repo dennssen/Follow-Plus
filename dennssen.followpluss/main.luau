@@ -1035,6 +1035,9 @@ local rightMouseButton = Input.Key.RightMouseButton
 local xMouse = Input.Key.MouseX
 local yMouse = Input.Key.MouseY
 
+-- Other camera callbacks
+local setHideHead: (boolean) -> () = nil
+
 -- Debug
 local debugFaceTheBall: boolean = false
 local followFreecam: boolean = false
@@ -2796,12 +2799,12 @@ function rotateCamera()
 	camera.rotation = Quat.slerp(camera.rotation, cameraRotation, math.min(adjustedLookSmoothness * deltaTime * 60, 1))
 end
 
-function mainProcess(dt)
+function mainProcess(dt: number, isFollowed: boolean)
 	if not hasTickedOnce then
 		hasTickedOnce = true
 	end
 
-	if not camera.isActive and not camera.isFollowed then
+	if not camera.isActive and not isFollowed then
 		alwaysTick = nil
 		onExit()
 		return
@@ -2866,18 +2869,21 @@ function mainProcess(dt)
 	previousCameraMode = activeCameraMode
 	previousTargetPlayerId = targetPlayer.playerId
 
-	camera.hideNearestHead = hidePlayerHead
+	if isFollowed and setHideHead then
+		setHideHead(hidePlayerHead)
+	else
+		camera.hideNearestHead = hidePlayerHead
+	end
 
 	rotateCamera()
 end
 
 function tick(dt)
 	if not camera.isActive then
-		Util.debugPrint(`Is Followed: {camera.isFollowed}`)
 		return
 	end
 
-	mainProcess(dt)
+	mainProcess(dt, false)
 end
 
 function onExit()
@@ -2896,7 +2902,7 @@ end
 
 type MessageValues = {
 	versionCallback: (string) -> ()?,
-	getMainProcessCallback: ((number) -> ()) -> ()?,
+	getMainProcessCallback: ((number, boolean) -> ()) -> ()?,
 	guiCallback: (() -> ()) -> ()?,
 	topSettingsCallback: (() -> ()) -> ()?,
 	checkboxSettingsCallback: (() -> ()) -> ()?,
@@ -2912,6 +2918,7 @@ type MessageValues = {
 	goalCamSettingsCallback: (() -> ()) -> ()?,
 	getTargetPlayerCallback: (() -> ReplayPlayer?) -> ()?,
 	getArenaCallback: (() -> FollowArena) -> ()?,
+	setHideHeadCallback: (boolean) -> ()?,
 	readLocation: number?,
 	showNameTags: boolean?,
 	isLeftHanded: boolean?,
@@ -3022,6 +3029,10 @@ function onMessageReceived(messageTable: MessageValues)
 	end
 	if messageTable.getArenaCallback ~= nil then
 		messageTable.getArenaCallback(getArena)
+	end
+
+	if messageTable.setHideHeadCallback ~= nil then
+		setHideHead = messageTable.setHideHeadCallback
 	end
 	-- readLocation is a number representing where to retrive data from, anything above 0 is a replay file. Trying to access a replay file that doesn't exist does nothing.
 	if messageTable.readLocation then
