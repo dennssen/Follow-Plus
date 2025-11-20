@@ -2796,7 +2796,7 @@ function rotateCamera()
 	camera.rotation = Quat.slerp(camera.rotation, cameraRotation, math.min(adjustedLookSmoothness * deltaTime * 60, 1))
 end
 
-function tick(dt)
+function mainProcess(dt)
 	if not hasTickedOnce then
 		hasTickedOnce = true
 	end
@@ -2871,6 +2871,15 @@ function tick(dt)
 	rotateCamera()
 end
 
+function tick(dt)
+	if not camera.isActive then
+		Util.debugPrint(`Is Followed: {camera.isFollowed}`)
+		return
+	end
+
+	mainProcess(dt)
+end
+
 function onExit()
 	camera.showNameTags = true
 	camera.hideNearestHead = false
@@ -2887,6 +2896,7 @@ end
 
 type MessageValues = {
 	versionCallback: (string) -> ()?,
+	getMainProcessCallback: ((number) -> ()) -> ()?,
 	guiCallback: (() -> ()) -> ()?,
 	topSettingsCallback: (() -> ()) -> ()?,
 	checkboxSettingsCallback: (() -> ()) -> ()?,
@@ -2956,12 +2966,16 @@ function onMessageReceived(messageTable: MessageValues)
 	if messageTable.showQuests ~= nil then
 		showQuests = messageTable.showQuests
 	end
-	if messageTable.versionCallback ~= nil then
-		messageTable.versionCallback(_version)
-	end
 	-- callback is a function that takes some part of this cameras GUI as a parameter to receive for the messenger. This is usefull for displaying the same GUI in multiple cameras.
 	-- some gui functions are inside others, like for instance the gestureSettings and followSettings being a part of mainSettings. They are seperated to make it easier to only display 1 of them.
 	-- if you only wanted 1 or some of the Gui elements inside a function you can then reacreate the Gui yourself and overwrite the values through messaging.
+
+	if messageTable.getMainProcessCallback ~= nil then
+		messageTable.getMainProcessCallback(mainProcess)
+	end
+	if messageTable.versionCallback ~= nil then
+		messageTable.versionCallback(_version)
+	end
 	if messageTable.guiCallback ~= nil then
 		messageTable.guiCallback(onGui)
 	end
