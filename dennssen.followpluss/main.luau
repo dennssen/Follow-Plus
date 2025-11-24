@@ -1,5 +1,5 @@
 --!strict
-local _version: string = "1.13.0"
+local _version: string = "1.13.1"
 
 -- Feature:
 -- When using Head Rotation (possibly other 3rd person modes) and hold down right click, the player gets full control over the rotation of the 3rd person mode by using their mouse until they let go of right click.
