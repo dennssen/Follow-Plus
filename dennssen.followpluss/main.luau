@@ -5,6 +5,7 @@ local _version: string = "1.13.0"
 -- When using Head Rotation (possibly other 3rd person modes) and hold down right click, the player gets full control over the rotation of the 3rd person mode by using their mouse until they let go of right click.
 -- Add content props support
 -- Add overlay support
+-- Removed ball outline when ball is too close
 
 -- dependecies
 local Util = require("util")
@@ -2900,7 +2901,8 @@ function onExit()
 	muteAll(false)
 end
 
-type MessageValues = {
+type FollowPlusData = {
+	-- Callbacks
 	versionCallback: (string) -> ()?,
 	getMainProcessCallback: ((number, boolean) -> ()) -> ()?,
 	guiCallback: (() -> ()) -> ()?,
@@ -2918,7 +2920,10 @@ type MessageValues = {
 	goalCamSettingsCallback: (() -> ()) -> ()?,
 	getTargetPlayerCallback: (() -> ReplayPlayer?) -> ()?,
 	getArenaCallback: (() -> FollowArena) -> ()?,
+	getFollowDataCallback: (() -> FollowPlusData) -> ()?,
 	setHideHeadCallback: (boolean) -> ()?,
+
+	-- Data
 	readLocation: number?,
 	showNameTags: boolean?,
 	isLeftHanded: boolean?,
@@ -2948,6 +2953,40 @@ type MessageValues = {
 	autoRecordReplays: boolean?,
 }
 
+function getFollowData(): FollowPlusData
+	local data: FollowPlusData = {
+		readLocation = readLocation,
+		showNameTags = showNameTags,
+		isLeftHanded = isLeftHanded,
+		muteSelf = muteSelf,
+		targetPlayer = targetPlayer,
+		targetPlayerName = targetPlayerName,
+		positionSmoothing = positionSmoothing,
+		rotationSmoothing = rotationSmoothing,
+		cameraFOV = cameraFOV,
+		cameraMode = cameraMode,
+		radius = radius,
+		threshold = threshold,
+		cameraPositionOffset = cameraPositionOffset,
+		cameraRotationOffset = Util.quatFromVec3(cameraEulerOffset),
+		gestureControls = gestureControls,
+		forwardGestureMode = forwardGestureMode,
+		upGestureMode = upGestureMode,
+		backwardsGestureMode = backwardsGestureMode,
+		autoBall = autoBall,
+		simResolutionScale = BallSim.resolutionScale,
+		simTimeLength = BallSim.pathLengthSeconds,
+		autoGoalCam = autoGoalCam,
+		ballGoalMode = ballGoalMode,
+		goalMode = goalMode,
+		hideNearestHead = hidePlayerHead,
+		showQuests = showQuests,
+		autoRecordReplays = autoRecordReplays,
+	}
+
+	return data
+end
+
 function getTargetPlayer(): ReplayPlayer?
 	return targetPlayer
 end
@@ -2956,7 +2995,7 @@ function getArena(): FollowArena
 	return arena
 end
 
-function onMessageReceived(messageTable: MessageValues)
+function onMessageReceived(messageTable: FollowPlusData)
 	-- only accept tables
 	if type(messageTable) ~= "table" then
 		return
