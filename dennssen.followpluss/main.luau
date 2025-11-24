@@ -1298,7 +1298,10 @@ function playerSettings()
 				end
 
 				if
-					(targetPlayer and targetPlayerName ~= targetPlayer.playerName)
+					(
+						(targetPlayer and targetPlayerName ~= targetPlayer.playerName)
+						or (not targetPlayer and targetPlayerName ~= profile.targetPlayerName)
+					)
 					and targetPlayerName ~= "YourName"
 					and not string.find(string.lower(player.playerName), string.lower(targetPlayerName))
 				then
