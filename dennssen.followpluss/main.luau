@@ -3072,6 +3072,9 @@ function onMessageReceived(messageTable: FollowPlusData)
 	if messageTable.getArenaCallback ~= nil then
 		messageTable.getArenaCallback(getArena)
 	end
+	if messageTable.getFollowDataCallback ~= nil then
+		messageTable.getFollowDataCallback(getFollowData)
+	end
 
 	if messageTable.setHideHeadCallback ~= nil then
 		setHideHead = messageTable.setHideHeadCallback
