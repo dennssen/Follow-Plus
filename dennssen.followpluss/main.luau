@@ -1031,6 +1031,10 @@ local orbitRadius = 100000
 local orbitRotation: Vec3 = Vec3.new(0, -20, 0)
 local orbitRotationSpeed = 4
 
+-- Manual orbit
+local isManualOrbitEnabled: boolean = false
+local manualOrbitEuler: Vec3 = Vec3.zeroVector
+
 --  Mouse
 local rightMouseButton = Input.Key.RightMouseButton
 local xMouse = Input.Key.MouseX
@@ -1830,6 +1834,11 @@ function debugSettings()
 			end
 			Gui.treePop()
 		end
+		if Gui.treeNode("Manual Orbit") then
+			Gui.text(`Enabled: {isManualOrbitEnabled}`)
+			Gui.text(`Rotation Euler: {tostring(manualOrbitEuler)}`)
+			Gui.treePop()
+		end
 		if Gui.treeNode("Settings") then
 			BallSim.debug = Gui.checkbox("Debug Ball Prediction", BallSim.debug)
 			BallSim.gravityScale = Gui.sliderFloat("Gravity", BallSim.gravityScale, 0, 1)
@@ -1966,6 +1975,34 @@ function updatePlayerData(player: ReplayPlayer, frame: ReplayFrame)
 		end
 
 		setArena(getClosestArena(player.root.position))
+	end
+end
+
+function toggleManualOrbit(toggle: boolean)
+	if toggle then
+		manualOrbitEuler = camera.rotation:euler()
+	end
+
+	isManualOrbitEnabled = toggle
+end
+
+function checkManualOrbitInput()
+	if Input.getKeyDown(rightMouseButton) then
+		toggleManualOrbit(true)
+	elseif Input.getKeyUp(rightMouseButton) then
+		toggleManualOrbit(false)
+	end
+
+	if Input.getAnalog(Input.Gamepad.RightX) > 0 or Input.getAnalog(Input.Gamepad.RightY) > 0 then
+		toggleManualOrbit(true)
+	end
+
+	if Input.getKeyDown(Input.Gamepad.RightThumbstick) then
+		toggleManualOrbit(false)
+	end
+
+	if cameraMode == CameraMode.FirstPerson or cameraMode == CameraMode.HandHeld then
+		toggleManualOrbit(false)
 	end
 end
 
@@ -2256,6 +2293,24 @@ function ballCam(radius: number, rotation: Quat)
 	velocityPivotPosition(ballPosition, Vec3.zeroVector, ballVelocity, ballCamRadius, false)
 end
 
+function manualOrbit(position: Vec3, offset: Vec3)
+	if Input.getKey(rightMouseButton) then
+		local mouseDelta = Input.getMouseDelta() * 2
+		manualOrbitEuler += Vec3.new(0, mouseDelta.y, mouseDelta.x)
+	else
+		local rightJoy = Vec2.new(Input.getAnalog(Input.Gamepad.RightX), Input.getAnalog(Input.Gamepad.RightY)) * 10
+		manualOrbitEuler += Vec3.new(0, rightJoy.y, rightJoy.x)
+	end
+
+	manualOrbitEuler = Vec3.new(manualOrbitEuler.x, math.clamp(manualOrbitEuler.y, -89.9, 89.9), manualOrbitEuler.z)
+	local manualOrbitDirection = Util.quatFromVec3(manualOrbitEuler)
+
+	local pivotOffset = Util.negateVec3(manualOrbitDirection:getForwardVector()) * (radius * 10)
+	setCameraRotation(manualOrbitDirection)
+	hidePlayerHead = false
+	setCameraPosition(position, offset, pivotOffset)
+end
+
 function firstPerson()
 	if not cameraTransition then
 		toggleSmoothing(false, true)
@@ -2319,9 +2374,9 @@ function thirdPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat, smar
 		anchorOffset = offsetPosition
 	end
 
-	if Input.getKey(rightMouseButton) then
-		smartSwitch = false
-		mouseRotationOffset()
+	if isManualOrbitEnabled then
+		manualOrbit(position, anchorOffset)
+		return
 	end
 
 	setCameraRotation(Util.lookAt(cameraPosition, position, gravityUpDirection))
@@ -2341,6 +2396,11 @@ function thirdPersonVelocity(position: Vec3, velocity: Vec3, rotation: Quat)
 		return
 	end
 
+	if isManualOrbitEnabled then
+		manualOrbit(position, offsetPosition)
+		return
+	end
+
 	setCameraRotation(Util.lookAt(cameraPosition, position, gravityUpDirection))
 	hidePlayerHead = false
 	velocityPivotPosition(position, offsetPosition, velocity, radius, false)
@@ -2353,6 +2413,11 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 
 	local offset = player.head.rotation:rotateVector(offsetPosition)
 	local position = player.head.position
+
+	if isManualOrbitEnabled then
+		manualOrbit(position, offset)
+		return
+	end
 
 	local horizontalVelocity = player.velocity - player.velocity:projectOnTo(gravity.upDirection)
 
@@ -2573,6 +2638,8 @@ function withPlayer(player: ReplayPlayer)
 	elseif cameraTransition then
 		cameraTransition = false
 	end
+
+	checkManualOrbitInput()
 
 	camera.fieldOfView = cameraFOV
 	if radius == 0 and cameraMode ~= CameraMode.HandHeld then
