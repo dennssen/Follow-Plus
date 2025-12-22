@@ -196,6 +196,16 @@ local autoRecordReplays: boolean = profile.autoRecordReplays and Settings.getLua
 local isRecordingReplay: boolean = false
 local debugAutoRecord: boolean = false
 
+type ActionType = "Start" | "Stop"
+
+type RecordingAction = {
+	actionType: ActionType,
+	delay: number,
+	reason: string?,
+}
+
+local recordingActionQueue: { RecordingAction } = {}
+
 function startRecording(debugMessage: string?)
 	if not autoRecordReplays or not Settings.getLuauReplayControlAllowed() then
 		return
@@ -229,6 +239,56 @@ function stopRecording(debugMessage: string?)
 
 	if Replay.stopRecording() then
 		isRecordingReplay = false
+	end
+end
+
+function addRecordingAction(actionType: ActionType, delay: number?, reason: string?)
+	if actionType ~= "Start" and actionType ~= "Stop" then
+		return
+	end
+
+	local actionDelay: number = 0
+
+	if delay ~= nil then
+		actionDelay = delay
+	end
+
+	table.insert(recordingActionQueue, {
+		actionType = actionType,
+		delay = actionDelay,
+		reason = reason,
+	})
+end
+
+--- If no index is provided, removes the first element.
+function removeRecordingAction(_index: number?)
+	local index: number = _index or 1
+
+	table.remove(recordingActionQueue, index)
+end
+
+function clearRecordingActions()
+	recordingActionQueue = {}
+end
+
+function advanceRecordingQueue()
+	if #recordingActionQueue == 0 then
+		return
+	end
+
+	local currentAction: RecordingAction = recordingActionQueue[1]
+
+	if currentAction.delay > 0 then
+		currentAction.delay -= deltaTime
+		return
+	end
+
+	if currentAction.actionType == "Start" then
+		startRecording(currentAction.reason)
+		removeRecordingAction()
+	elseif currentAction.actionType == "Stop" then
+		stopRecording(currentAction.reason)
+		removeRecordingAction()
 	end
 end
 
@@ -312,11 +372,11 @@ function FollowArena:onRoundStartHook()
 		return
 	end
 
-	startRecording("round start")
+	addRecordingAction("Start", 0, "round start")
 end
 
 function FollowArena:onRoundEndHook(_isRestart: boolean, _homeScore: number, _awayScore: number)
-	stopRecording("round end")
+	addRecordingAction("Stop", 5, "round end")
 end
 
 type Arena3v3 = FollowArena & {
@@ -1042,6 +1102,8 @@ local setHideHead: (boolean) -> () = nil
 -- Debug
 local debugFaceTheBall: boolean = false
 local followFreecam: boolean = false
+local debugStartRecordDelay: number = 0
+local debugStopRecordDelay: number = 2
 
 function updateVariables(profileName)
 	isSelfMuted = false
@@ -1127,7 +1189,7 @@ function setTargetPlayer(player: ReplayPlayer?)
 	end
 
 	if player.teamIndex == Util.TeamIndex.NoTeam then
-		stopRecording("new player - no team")
+		addRecordingAction("Stop", 0, "new player - no team")
 	end
 
 	if showQuests then -- show quests
@@ -1150,7 +1212,7 @@ function clearTargetPlayer()
 		end
 		isSelfMuted = not muteSelf
 
-		stopRecording("clear target player")
+		addRecordingAction("Stop", 0, "clear target player")
 		targetPlayerName = ""
 		targetPlayer = nil
 	end
@@ -1164,12 +1226,12 @@ function setArena(_arena: FollowArena)
 	local sameArena = arena and arena.name == _arena.name
 	if sameArena then
 		if arena.isGameActive and teamIndex ~= Util.TeamIndex.NoTeam then -- Different player in a different arena that they are playing in and the game is on going
-			startRecording("join active game")
+			addRecordingAction("Start", 0, "join active game")
 		end
 		return
 	end
 
-	stopRecording("new player - different arena")
+	addRecordingAction("Stop", 0, "new player - different arena")
 
 	arena = _arena
 	arena.frameIndex = readLocation
@@ -1179,7 +1241,7 @@ function setArena(_arena: FollowArena)
 	BallSim.arena = arena :: any
 
 	if arena.isGameActive and teamIndex ~= Util.TeamIndex.NoTeam then
-		startRecording("join active game")
+		addRecordingAction("Start", 0, "join active game")
 	end
 end
 
@@ -1830,6 +1892,20 @@ function debugSettings()
 			end
 			Gui.treePop()
 		end
+		if Gui.treeNode("Recording") then
+			debugAutoRecord = Gui.checkbox("Debug Auto Record", debugAutoRecord)
+			debugStartRecordDelay = Gui.sliderFloat("Start Delay", debugStartRecordDelay, 0, 10)
+			debugStopRecordDelay = Gui.sliderFloat("Stop Delay", debugStopRecordDelay, 0, 10)
+			Gui.newLine()
+			if Gui.button("Start Recording") then
+				addRecordingAction("Start", debugStartRecordDelay, "Debug Start")
+			end
+			Gui.sameLine()
+			if Gui.button("Stop Recording") then
+				addRecordingAction("Stop", debugStopRecordDelay, "Debug Stop")
+			end
+			Gui.treePop()
+		end
 		if Gui.treeNode("Settings") then
 			BallSim.debug = Gui.checkbox("Debug Ball Prediction", BallSim.debug)
 			BallSim.gravityScale = Gui.sliderFloat("Gravity", BallSim.gravityScale, 0, 1)
@@ -1838,7 +1914,6 @@ function debugSettings()
 			Gui.newLine()
 
 			debugFaceTheBall = Gui.checkbox("Debug Face The Ball", debugFaceTheBall)
-			debugAutoRecord = Gui.checkbox("Debug Auto Record", debugAutoRecord)
 
 			Gui.newLine()
 
@@ -1962,7 +2037,7 @@ function updatePlayerData(player: ReplayPlayer, frame: ReplayFrame)
 		teamIndex = player.teamIndex
 
 		if teamIndex == Util.TeamIndex.NoTeam then
-			stopRecording("player leave arena")
+			addRecordingAction("Stop", 1.5, "player leave arena")
 		end
 
 		setArena(getClosestArena(player.root.position))
@@ -2832,6 +2907,12 @@ function mainProcess(dt: number, isFollowed: boolean)
 		return
 	end
 
+	if debugAutoRecord then
+		advanceRecordingQueue()
+		noPlayerOrbit(dt)
+		return
+	end
+
 	if #frame.players == 0 then
 		noPlayerOrbit(dt)
 		return
@@ -2864,6 +2945,7 @@ function mainProcess(dt: number, isFollowed: boolean)
 	gravityUpDirection = targetPlayer.root.rotation:getUpVector()
 	updateBallData(ball, dt)
 	withPlayer(targetPlayer)
+	advanceRecordingQueue()
 	configureVOIP()
 
 	if targetPlayer.teamIndex ~= Util.TeamIndex.NoTeam then
@@ -2899,7 +2981,7 @@ function onExit()
 		camera:showQuestsForPlayerById(targetPlayer.playerId, false)
 	end
 
-	stopRecording("exit camera")
+	addRecordingAction("Stop", 0, "exit camera")
 
 	muteAll(false)
 end
