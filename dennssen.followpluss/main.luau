@@ -1096,9 +1096,6 @@ local rightMouseButton = Input.Key.RightMouseButton
 local xMouse = Input.Key.MouseX
 local yMouse = Input.Key.MouseY
 
--- Other camera callbacks
-local setHideHead: (boolean) -> () = nil
-
 -- Debug
 local debugFaceTheBall: boolean = false
 local followFreecam: boolean = false
@@ -2909,10 +2906,12 @@ function rotateCamera()
 	camera.rotation = Quat.slerp(camera.rotation, cameraRotation, math.min(adjustedLookSmoothness * deltaTime * 60, 1))
 end
 
-function mainProcess(dt: number, isFollowed: boolean)
+function mainProcess(dt: number, followedBy: SpectatorCamera?)
 	if not hasTickedOnce then
 		hasTickedOnce = true
 	end
+
+	local isFollowed: boolean = followedBy ~= nil
 
 	if not camera.isActive and not isFollowed then
 		alwaysTick = nil
@@ -2920,7 +2919,7 @@ function mainProcess(dt: number, isFollowed: boolean)
 		return
 	end
 
-	if not camera.isFollowed then
+	if not isFollowed then
 		WorldDraw.clear()
 	end
 
@@ -2986,8 +2985,8 @@ function mainProcess(dt: number, isFollowed: boolean)
 	previousCameraMode = activeCameraMode
 	previousTargetPlayerId = targetPlayer.playerId
 
-	if isFollowed and setHideHead then
-		setHideHead(hidePlayerHead)
+	if followedBy ~= nil then
+		followedBy.hideNearestHead = hidePlayerHead
 	else
 		camera.hideNearestHead = hidePlayerHead
 	end
@@ -3000,7 +2999,7 @@ function tick(dt)
 		return
 	end
 
-	mainProcess(dt, false)
+	mainProcess(dt)
 end
 
 function onExit()
@@ -3020,7 +3019,7 @@ end
 type FollowPlusData = {
 	-- Callbacks
 	versionCallback: (string) -> ()?,
-	getMainProcessCallback: ((number, boolean) -> ()) -> ()?,
+	getMainProcessCallback: ((number, SpectatorCamera) -> ()) -> ()?,
 	guiCallback: (() -> ()) -> ()?,
 	topSettingsCallback: (() -> ()) -> ()?,
 	checkboxSettingsCallback: (() -> ()) -> ()?,
@@ -3037,7 +3036,6 @@ type FollowPlusData = {
 	getTargetPlayerCallback: (() -> ReplayPlayer?) -> ()?,
 	getArenaCallback: (() -> FollowArena) -> ()?,
 	getFollowDataCallback: (() -> FollowPlusData) -> ()?,
-	setHideHeadCallback: (boolean) -> ()?,
 
 	-- Data
 	readLocation: number?,
@@ -3189,9 +3187,6 @@ function onMessageReceived(messageTable: FollowPlusData)
 		messageTable.getFollowDataCallback(getFollowData)
 	end
 
-	if messageTable.setHideHeadCallback ~= nil then
-		setHideHead = messageTable.setHideHeadCallback
-	end
 	-- readLocation is a number representing where to retrive data from, anything above 0 is a replay file. Trying to access a replay file that doesn't exist does nothing.
 	if messageTable.readLocation then
 		readLocation = messageTable.readLocation
