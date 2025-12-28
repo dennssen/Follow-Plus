@@ -2657,7 +2657,7 @@ function withPlayer(player: ReplayPlayer)
 	elseif cameraMode == CameraMode.VelocityRotation then
 		thirdPersonVelocity(headPosition, player.velocity, headRotation)
 	elseif cameraMode == CameraMode.FaceTheBall then
-		if player.teamIndex ~= Util.TeamIndex.NoTeam then
+		if player.teamIndex ~= Util.TeamIndex.NoTeam and not Util.isHoldingZDriftball(arena.ball, player) then
 			thirdPersonFacingBall(player, THIRD_PERSON_OFFSET)
 		else
 			thirdPerson(headPosition, THIRD_PERSON_OFFSET + cameraPositionOffset, headRotation, false)
