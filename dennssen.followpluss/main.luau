@@ -2802,25 +2802,46 @@ function drawBallOutline(ball: ReplayBall)
 
 	local ballRadius = 17.5
 	local segments = 20
-	local radius = ui:getApparentLength(ballRadius, ball.transform.position)
-	local thickness = math.min(ui.depth / 100, radius / 1000)
-
 	local angleStep = (2 * math.pi) / segments
-	local prevPoint = nil
+	local thickness = (ui.depth / 50) / (Util.getDist(camera.position, ball.transform.position) / 100)
 
+	local camToBall = (ball.transform.position - camera.position):getSafeNormal()
+
+	-- Create perpendicular vectors for the circle plane
+	local right = camToBall:cross(camera.rotation:getUpVector()):getSafeNormal()
+	local up = right:cross(camToBall):getSafeNormal()
+
+	local points = {}
 	for i = 0, segments do
 		local angle = i * angleStep
+		local x = ballRadius * math.cos(angle)
+		local y = ballRadius * math.sin(angle)
 
-		local x = radius * math.cos(angle)
-		local y = radius * math.sin(angle)
+		-- Calculate 3D world position on the sphere
+		local worldPoint = ball.transform.position + (right * x) + (up * y)
 
-		local point: Vec2 = ballHUDPosition + Vec2.new(x, y)
+		-- Project to HUD space
+		local point: Vec2 = ui:worldToHUD(worldPoint)
 
-		if prevPoint then
-			ui:drawLine(prevPoint, point, Vec3.oneVector, thickness, 0)
+		if point == Vec2.zeroVector then
+			points = {} -- reset so none are drawn
+			break
 		end
 
-		prevPoint = point
+		table.insert(points, point)
+	end
+
+	if #points == 0 then
+		return
+	end
+
+	for i, point in points do
+		if i == 1 then
+			continue -- skip the first
+		end
+
+		local lastPoint = points[i - 1]
+		ui:drawLine(lastPoint, point, Vec3.oneVector, thickness, 0)
 	end
 end
 
