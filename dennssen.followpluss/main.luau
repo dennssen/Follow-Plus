@@ -2794,18 +2794,28 @@ end
 function drawBallOutline(ball: ReplayBall)
 	ui:tick()
 
-	local ballHUDPosition: Vec2 = ui:worldToHUD(ball.transform.position)
+	local ballPosition: Vec3 = ball.transform.position
+	local ballDistance: number = Util.getDist(camera.position, ballPosition)
+	local ballRadius = 17.5
+
+	local minimumRenderDistance: number = (ballRadius * 2) * 3
+
+	-- only disable render on live data. Replays are smooth as butter.
+	if readLocation == 0 and ballDistance <= minimumRenderDistance then
+		return
+	end
+
+	local ballHUDPosition: Vec2 = ui:worldToHUD(ballPosition)
 
 	if ballHUDPosition == Vec2.zeroVector then
 		return
 	end
 
-	local ballRadius = 17.5
 	local segments = 20
 	local angleStep = (2 * math.pi) / segments
-	local thickness = (ui.depth / 50) / (Util.getDist(camera.position, ball.transform.position) / 100)
+	local thickness = (ui.depth / 50) / (ballDistance / 100)
 
-	local camToBall = (ball.transform.position - camera.position):getSafeNormal()
+	local camToBall = (ballPosition - camera.position):getSafeNormal()
 
 	-- Create perpendicular vectors for the circle plane
 	local right = camToBall:cross(camera.rotation:getUpVector()):getSafeNormal()
@@ -2818,7 +2828,7 @@ function drawBallOutline(ball: ReplayBall)
 		local y = ballRadius * math.sin(angle)
 
 		-- Calculate 3D world position on the sphere
-		local worldPoint = ball.transform.position + (right * x) + (up * y)
+		local worldPoint = ballPosition + (right * x) + (up * y)
 
 		-- Project to HUD space
 		local point: Vec2 = ui:worldToHUD(worldPoint)
