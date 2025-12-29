@@ -351,6 +351,12 @@ local playerChestRotation: Quat = Quat.identity
 local isLocalPlayer = false
 local teamIndex = -1
 
+local isHoldingZDriftBall = false
+local zDriftBallHoldTime: number = 0
+local zDriftBallDropTime: number = 0
+local minimumZDriftBallHoldTime: number = 0.33
+local minimumZDriftBallDropTime: number = 1.25
+
 local previousLeftHandPosition: Vec3 = Vec3.zeroVector
 local previousRightHandPosition: Vec3 = Vec3.zeroVector
 local isLeftHanded: boolean = profile.isLeftHanded
@@ -2090,6 +2096,24 @@ function updateBallData(ball: ReplayBall, seconds: number)
 	ballVelocity = ball.velocity
 end
 
+function checkZDriftBallGrab(player: ReplayPlayer, ball: ReplayBall)
+	local isGrabbing = Util.isHoldingZDriftball(ball, player)
+
+	if isGrabbing then
+		zDriftBallDropTime = 0
+		zDriftBallHoldTime = math.min(zDriftBallHoldTime + deltaTime, minimumZDriftBallHoldTime)
+	else
+		zDriftBallHoldTime = 0
+		zDriftBallDropTime = math.min(zDriftBallDropTime + deltaTime, minimumZDriftBallDropTime)
+	end
+
+	if zDriftBallHoldTime >= minimumZDriftBallHoldTime then
+		isHoldingZDriftBall = true
+	elseif zDriftBallDropTime >= minimumZDriftBallDropTime then
+		isHoldingZDriftBall = false
+	end
+end
+
 function isGrabbingCamera(player: ReplayPlayer): Transform?
 	local leftHandPosition = player.root.position + player.root.rotation:rotateVector(player.leftHand.position)
 	local leftPoseFlags = Util.decodePoseBits(player.leftHandPosebits)
@@ -2654,7 +2678,7 @@ function withPlayer(player: ReplayPlayer)
 	elseif cameraMode == CameraMode.VelocityRotation then
 		thirdPersonVelocity(headPosition, player.velocity, headRotation)
 	elseif cameraMode == CameraMode.FaceTheBall then
-		if player.teamIndex ~= Util.TeamIndex.NoTeam and not Util.isHoldingZDriftball(arena.ball, player) then
+		if player.teamIndex ~= Util.TeamIndex.NoTeam and not isHoldingZDriftBall then
 			thirdPersonFacingBall(player, THIRD_PERSON_OFFSET)
 		else
 			thirdPerson(headPosition, THIRD_PERSON_OFFSET + cameraPositionOffset, headRotation, false)
@@ -2974,6 +2998,7 @@ function mainProcess(dt: number, followedBy: SpectatorCamera?)
 
 	gravityUpDirection = targetPlayer.root.rotation:getUpVector()
 	updateBallData(ball, dt)
+	checkZDriftBallGrab(targetPlayer, ball)
 	withPlayer(targetPlayer)
 	advanceRecordingQueue()
 	configureVOIP()
