@@ -938,7 +938,6 @@ local cameraTransition: boolean = false
 local THIRD_PERSON_OFFSET: Vec3 = Vec3.new(0, 0, 50)
 local cameraEulerOffset: Vec3 = stringToVec3(profile.cameraEulerOffset)
 local cameraPositionOffset: Vec3 = Vec3.zeroVector
-local distance = 0
 local flipTime: number = 0
 local maxFlipTime: number = 0.5
 local previousHandHeldRotationOffset: Quat = Quat.identity
@@ -1868,7 +1867,6 @@ function debugSettings()
 			Gui.treePop()
 		end
 		if Gui.treeNode("Other") then
-			Gui.text("Distance: " .. tostring(distance))
 			Gui.text("Ball Distance: " .. tostring(Util.getDist(headPosition, ballPosition)))
 			Gui.text("Is Recording Replay: " .. tostring(isRecordingReplay))
 			Gui.treePop()
