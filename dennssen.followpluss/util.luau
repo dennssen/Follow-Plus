@@ -367,6 +367,24 @@ function Util.fullHandPoseToString(fullHandPoseOverride: number): string
 	return name
 end
 
+function Util.getRightPlayerHand(player: ReplayPlayer): Transform
+	local transform: Transform = Transform.identity
+
+	transform.position = player.root.position + player.root.rotation:rotateVector(player.rightHand.position)
+	transform.rotation = player.root.rotation * player.rightHand.rotation
+
+	return transform
+end
+
+function Util.getLeftPlayerHand(player: ReplayPlayer): Transform
+	local transform: Transform = Transform.identity
+
+	transform.position = player.root.position + player.root.rotation:rotateVector(player.leftHand.position)
+	transform.rotation = player.root.rotation * player.leftHand.rotation
+
+	return transform
+end
+
 --[=[
 Checks if a player is withing a reasonable distance of the ball with their hands or head
 
@@ -405,6 +423,61 @@ function Util.isDriftballHeld(ball: ReplayBall, ballRadius: number, players: { R
 	else
 		return nil
 	end
+end
+
+--[=[
+@param ball the ball that could be held
+@param player the player we are checking is holding the ball
+@return true if the player is holding the ball
+]=]
+function Util.isHoldingZDriftball(ball: ReplayBall, player: ReplayPlayer): boolean
+	local leftHandPoses = Util.decodePoseBits(player.leftHandPosebits)
+	local rightHandPoses = Util.decodePoseBits(player.rightHandPosebits)
+
+	local grabBallHandPos: { left: Vec3?, right: Vec3? } = {
+		left = nil,
+		right = nil,
+	}
+
+	if leftHandPoses.FullHandPoseOverride == Util.HandPose.GrabBall then
+		grabBallHandPos.left = Util.getLeftPlayerHand(player).position
+	end
+
+	if rightHandPoses.FullHandPoseOverride == Util.HandPose.GrabBall then
+		grabBallHandPos.right = Util.getRightPlayerHand(player).position
+	end
+
+	if grabBallHandPos.right == nil and grabBallHandPos.left == nil then
+		return false -- Not grabbing a ball
+	end
+
+	if
+		(grabBallHandPos.right and grabBallHandPos.right:distance(ball.transform.position) <= 10)
+		or (grabBallHandPos.left and grabBallHandPos.left:distance(ball.transform.position) <= 10)
+	then
+		return true
+	else
+		return false
+	end
+end
+
+--[=[
+Checks if a player is holding the zdrift ball
+
+**IMPORTANT:** This is meant for ZDrift and other gamemodes where you hold the ball with grip.
+For checking if a player is holding a ball with physical contact use `isDriftballHeld()`.
+
+@return the player holding the ball
+@return `nil` if no player is holding the ball
+]=]
+function Util.isZDriftballHeld(ball: ReplayBall, players: { ReplayPlayer }): ReplayPlayer?
+	for _, player in players do
+		if Util.isHoldingZDriftball(ball, player) then
+			return player
+		end
+	end
+
+	return nil
 end
 
 --- @return the closest player in the table `players` to the `ball`
@@ -678,6 +751,18 @@ function Util.clampAround(n: number, min: number, max: number): number
 	else
 		return n
 	end
+end
+
+function Util.followCamera(_cameraId: string)
+	local _camera: SpectatorCamera? = getCameraById(_cameraId)
+
+	if not _camera then
+		return
+	end
+
+	camera.fieldOfView = _camera.fieldOfView
+	camera.position = _camera.position
+	camera.rotation = _camera.rotation
 end
 
 return Util

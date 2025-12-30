@@ -1,5 +1,5 @@
 --!strict
-local _version: string = "1.13.1"
+local _version: string = "1.13.2"
 
 -- Feature:
 -- When using Head Rotation (possibly other 3rd person modes) and hold down right click, the player gets full control over the rotation of the 3rd person mode by using their mouse until they let go of right click.
@@ -199,6 +199,16 @@ local autoRecordReplays: boolean = profile.autoRecordReplays and Settings.getLua
 local isRecordingReplay: boolean = false
 local debugAutoRecord: boolean = false
 
+type ActionType = "Start" | "Stop"
+
+type RecordingAction = {
+	actionType: ActionType,
+	delay: number,
+	reason: string?,
+}
+
+local recordingActionQueue: { RecordingAction } = {}
+
 function startRecording(debugMessage: string?)
 	if not autoRecordReplays or not Settings.getLuauReplayControlAllowed() then
 		return
@@ -232,6 +242,56 @@ function stopRecording(debugMessage: string?)
 
 	if Replay.stopRecording() then
 		isRecordingReplay = false
+	end
+end
+
+function addRecordingAction(actionType: ActionType, delay: number?, reason: string?)
+	if actionType ~= "Start" and actionType ~= "Stop" then
+		return
+	end
+
+	local actionDelay: number = 0
+
+	if delay ~= nil then
+		actionDelay = delay
+	end
+
+	table.insert(recordingActionQueue, {
+		actionType = actionType,
+		delay = actionDelay,
+		reason = reason,
+	})
+end
+
+--- If no index is provided, removes the first element.
+function removeRecordingAction(_index: number?)
+	local index: number = _index or 1
+
+	table.remove(recordingActionQueue, index)
+end
+
+function clearRecordingActions()
+	recordingActionQueue = {}
+end
+
+function advanceRecordingQueue()
+	if #recordingActionQueue == 0 then
+		return
+	end
+
+	local currentAction: RecordingAction = recordingActionQueue[1]
+
+	if currentAction.delay > 0 then
+		currentAction.delay -= deltaTime
+		return
+	end
+
+	if currentAction.actionType == "Start" then
+		startRecording(currentAction.reason)
+		removeRecordingAction()
+	elseif currentAction.actionType == "Stop" then
+		stopRecording(currentAction.reason)
+		removeRecordingAction()
 	end
 end
 
@@ -294,6 +354,12 @@ local playerChestRotation: Quat = Quat.identity
 local isLocalPlayer = false
 local teamIndex = -1
 
+local isHoldingZDriftBall = false
+local zDriftBallHoldTime: number = 0
+local zDriftBallDropTime: number = 0
+local minimumZDriftBallHoldTime: number = 0.33
+local minimumZDriftBallDropTime: number = 1.25
+
 local previousLeftHandPosition: Vec3 = Vec3.zeroVector
 local previousRightHandPosition: Vec3 = Vec3.zeroVector
 local isLeftHanded: boolean = profile.isLeftHanded
@@ -315,11 +381,11 @@ function FollowArena:onRoundStartHook()
 		return
 	end
 
-	startRecording("round start")
+	addRecordingAction("Start", 0, "round start")
 end
 
 function FollowArena:onRoundEndHook(_isRestart: boolean, _homeScore: number, _awayScore: number)
-	stopRecording("round end")
+	addRecordingAction("Stop", 5, "round end")
 end
 
 type Arena3v3 = FollowArena & {
@@ -1045,12 +1111,11 @@ local controllerDeadzone: number = profile.controllerDeadzone
 --  Mouse
 local rightMouseButton = Input.Key.RightMouseButton
 
--- Other camera callbacks
-local setHideHead: (boolean) -> () = nil
-
 -- Debug
 local debugFaceTheBall: boolean = false
 local followFreecam: boolean = false
+local debugStartRecordDelay: number = 0
+local debugStopRecordDelay: number = 2
 
 function updateVariables(profileName)
 	isSelfMuted = false
@@ -1136,7 +1201,7 @@ function setTargetPlayer(player: ReplayPlayer?)
 	end
 
 	if player.teamIndex == Util.TeamIndex.NoTeam then
-		stopRecording("new player - no team")
+		addRecordingAction("Stop", 0, "new player - no team")
 	end
 
 	if showQuests then -- show quests
@@ -1159,7 +1224,7 @@ function clearTargetPlayer()
 		end
 		isSelfMuted = not muteSelf
 
-		stopRecording("clear target player")
+		addRecordingAction("Stop", 0, "clear target player")
 		targetPlayerName = ""
 		targetPlayer = nil
 	end
@@ -1173,12 +1238,12 @@ function setArena(_arena: FollowArena)
 	local sameArena = arena and arena.name == _arena.name
 	if sameArena then
 		if arena.isGameActive and teamIndex ~= Util.TeamIndex.NoTeam then -- Different player in a different arena that they are playing in and the game is on going
-			startRecording("join active game")
+			addRecordingAction("Start", 0, "join active game")
 		end
 		return
 	end
 
-	stopRecording("new player - different arena")
+	addRecordingAction("Stop", 0, "new player - different arena")
 
 	arena = _arena
 	arena.frameIndex = readLocation
@@ -1188,7 +1253,7 @@ function setArena(_arena: FollowArena)
 	BallSim.arena = arena :: any
 
 	if arena.isGameActive and teamIndex ~= Util.TeamIndex.NoTeam then
-		startRecording("join active game")
+		addRecordingAction("Start", 0, "join active game")
 	end
 end
 
@@ -1856,6 +1921,20 @@ function debugSettings()
 			Gui.text(`Rotation Euler: {tostring(manualOrbitEuler)}`)
 			Gui.treePop()
 		end
+		if Gui.treeNode("Recording") then
+			debugAutoRecord = Gui.checkbox("Debug Auto Record", debugAutoRecord)
+			debugStartRecordDelay = Gui.sliderFloat("Start Delay", debugStartRecordDelay, 0, 10)
+			debugStopRecordDelay = Gui.sliderFloat("Stop Delay", debugStopRecordDelay, 0, 10)
+			Gui.newLine()
+			if Gui.button("Start Recording") then
+				addRecordingAction("Start", debugStartRecordDelay, "Debug Start")
+			end
+			Gui.sameLine()
+			if Gui.button("Stop Recording") then
+				addRecordingAction("Stop", debugStopRecordDelay, "Debug Stop")
+			end
+			Gui.treePop()
+		end
 		if Gui.treeNode("Settings") then
 			BallSim.debug = Gui.checkbox("Debug Ball Prediction", BallSim.debug)
 			BallSim.gravityScale = Gui.sliderFloat("Gravity", BallSim.gravityScale, 0, 1)
@@ -1864,7 +1943,6 @@ function debugSettings()
 			Gui.newLine()
 
 			debugFaceTheBall = Gui.checkbox("Debug Face The Ball", debugFaceTheBall)
-			debugAutoRecord = Gui.checkbox("Debug Auto Record", debugAutoRecord)
 
 			Gui.newLine()
 
@@ -1987,7 +2065,7 @@ function updatePlayerData(player: ReplayPlayer, frame: ReplayFrame)
 		teamIndex = player.teamIndex
 
 		if teamIndex == Util.TeamIndex.NoTeam then
-			stopRecording("player leave arena")
+			addRecordingAction("Stop", 1.5, "player leave arena")
 		end
 
 		setArena(getClosestArena(player.root.position))
@@ -2059,6 +2137,24 @@ function updateBallData(ball: ReplayBall, seconds: number)
 	ballRotation = ball.transform.rotation
 	ballArena = ball.arena
 	ballVelocity = ball.velocity
+end
+
+function checkZDriftBallGrab(player: ReplayPlayer, ball: ReplayBall)
+	local isGrabbing = Util.isHoldingZDriftball(ball, player)
+
+	if isGrabbing then
+		zDriftBallDropTime = 0
+		zDriftBallHoldTime = math.min(zDriftBallHoldTime + deltaTime, minimumZDriftBallHoldTime)
+	else
+		zDriftBallHoldTime = 0
+		zDriftBallDropTime = math.min(zDriftBallDropTime + deltaTime, minimumZDriftBallDropTime)
+	end
+
+	if zDriftBallHoldTime >= minimumZDriftBallHoldTime then
+		isHoldingZDriftBall = true
+	elseif zDriftBallDropTime >= minimumZDriftBallDropTime then
+		isHoldingZDriftBall = false
+	end
 end
 
 function isGrabbingCamera(player: ReplayPlayer): Transform?
@@ -2690,7 +2786,7 @@ function withPlayer(player: ReplayPlayer)
 	elseif cameraMode == CameraMode.VelocityRotation then
 		thirdPersonVelocity(headPosition, player.velocity, headRotation)
 	elseif cameraMode == CameraMode.FaceTheBall then
-		if player.teamIndex ~= Util.TeamIndex.NoTeam then
+		if player.teamIndex ~= Util.TeamIndex.NoTeam and not isHoldingZDriftBall then
 			thirdPersonFacingBall(player, THIRD_PERSON_OFFSET)
 		else
 			thirdPerson(headPosition, THIRD_PERSON_OFFSET + cameraPositionOffset, headRotation, false)
@@ -2827,33 +2923,64 @@ end
 function drawBallOutline(ball: ReplayBall)
 	ui:tick()
 
-	local ballHUDPosition: Vec2 = ui:worldToHUD(ball.transform.position)
+	local ballPosition: Vec3 = ball.transform.position
+	local ballDistance: number = Util.getDist(camera.position, ballPosition)
+	local ballRadius = 17.5
+
+	local minimumRenderDistance: number = (ballRadius * 2) * 3
+
+	-- only disable render on live data. Replays are smooth as butter.
+	if readLocation == 0 and ballDistance <= minimumRenderDistance then
+		return
+	end
+
+	local ballHUDPosition: Vec2 = ui:worldToHUD(ballPosition)
 
 	if ballHUDPosition == Vec2.zeroVector then
 		return
 	end
 
-	local ballRadius = 17.5
 	local segments = 20
-	local radius = ui:getApparentLength(ballRadius, ball.transform.position)
-	local thickness = math.min(ui.depth / 100, radius / 1000)
-
 	local angleStep = (2 * math.pi) / segments
-	local prevPoint = nil
+	local thickness = (ui.depth / 50) / (ballDistance / 100)
 
+	local camToBall = (ballPosition - camera.position):getSafeNormal()
+
+	-- Create perpendicular vectors for the circle plane
+	local right = camToBall:cross(camera.rotation:getUpVector()):getSafeNormal()
+	local up = right:cross(camToBall):getSafeNormal()
+
+	local points = {}
 	for i = 0, segments do
 		local angle = i * angleStep
+		local x = ballRadius * math.cos(angle)
+		local y = ballRadius * math.sin(angle)
 
-		local x = radius * math.cos(angle)
-		local y = radius * math.sin(angle)
+		-- Calculate 3D world position on the sphere
+		local worldPoint = ballPosition + (right * x) + (up * y)
 
-		local point: Vec2 = ballHUDPosition + Vec2.new(x, y)
+		-- Project to HUD space
+		local point: Vec2 = ui:worldToHUD(worldPoint)
 
-		if prevPoint then
-			ui:drawLine(prevPoint, point, Vec3.oneVector, thickness, 0)
+		if point == Vec2.zeroVector then
+			points = {} -- reset so none are drawn
+			break
 		end
 
-		prevPoint = point
+		table.insert(points, point)
+	end
+
+	if #points == 0 then
+		return
+	end
+
+	for i, point in points do
+		if i == 1 then
+			continue -- skip the first
+		end
+
+		local lastPoint = points[i - 1]
+		ui:drawLine(lastPoint, point, Vec3.oneVector, thickness, 0)
 	end
 end
 
@@ -2911,10 +3038,12 @@ function rotateCamera()
 	camera.rotation = Quat.slerp(camera.rotation, cameraRotation, math.min(adjustedLookSmoothness * deltaTime * 60, 1))
 end
 
-function mainProcess(dt: number, isFollowed: boolean)
+function mainProcess(dt: number, followedBy: SpectatorCamera?)
 	if not hasTickedOnce then
 		hasTickedOnce = true
 	end
+
+	local isFollowed: boolean = followedBy ~= nil
 
 	if not camera.isActive and not isFollowed then
 		alwaysTick = nil
@@ -2922,7 +3051,7 @@ function mainProcess(dt: number, isFollowed: boolean)
 		return
 	end
 
-	if not camera.isFollowed then
+	if not isFollowed then
 		WorldDraw.clear()
 	end
 
@@ -2937,6 +3066,12 @@ function mainProcess(dt: number, isFollowed: boolean)
 		arena = Util.getDictIndex(arenas, 1)
 		arena:tick()
 		drawBallOutline(arena.ball)
+		return
+	end
+
+	if debugAutoRecord then
+		advanceRecordingQueue()
+		noPlayerOrbit(dt)
 		return
 	end
 
@@ -2971,7 +3106,9 @@ function mainProcess(dt: number, isFollowed: boolean)
 
 	gravityUpDirection = targetPlayer.root.rotation:getUpVector()
 	updateBallData(ball, dt)
+	checkZDriftBallGrab(targetPlayer, ball)
 	withPlayer(targetPlayer)
+	advanceRecordingQueue()
 	configureVOIP()
 
 	if targetPlayer.teamIndex ~= Util.TeamIndex.NoTeam then
@@ -2981,8 +3118,8 @@ function mainProcess(dt: number, isFollowed: boolean)
 	previousCameraMode = activeCameraMode
 	previousTargetPlayerId = targetPlayer.playerId
 
-	if isFollowed and setHideHead then
-		setHideHead(hidePlayerHead)
+	if followedBy ~= nil then
+		followedBy.hideNearestHead = hidePlayerHead
 	else
 		camera.hideNearestHead = hidePlayerHead
 	end
@@ -2995,7 +3132,7 @@ function tick(dt)
 		return
 	end
 
-	mainProcess(dt, false)
+	mainProcess(dt)
 end
 
 function onExit()
@@ -3007,7 +3144,7 @@ function onExit()
 		camera:showQuestsForPlayerById(targetPlayer.playerId, false)
 	end
 
-	stopRecording("exit camera")
+	addRecordingAction("Stop", 0, "exit camera")
 
 	muteAll(false)
 end
@@ -3015,7 +3152,7 @@ end
 type FollowPlusData = {
 	-- Callbacks
 	versionCallback: (string) -> ()?,
-	getMainProcessCallback: ((number, boolean) -> ()) -> ()?,
+	getMainProcessCallback: ((number, SpectatorCamera) -> ()) -> ()?,
 	guiCallback: (() -> ()) -> ()?,
 	topSettingsCallback: (() -> ()) -> ()?,
 	checkboxSettingsCallback: (() -> ()) -> ()?,
@@ -3032,7 +3169,6 @@ type FollowPlusData = {
 	getTargetPlayerCallback: (() -> ReplayPlayer?) -> ()?,
 	getArenaCallback: (() -> FollowArena) -> ()?,
 	getFollowDataCallback: (() -> FollowPlusData) -> ()?,
-	setHideHeadCallback: (boolean) -> ()?,
 
 	-- Data
 	readLocation: number?,
@@ -3190,9 +3326,6 @@ function onMessageReceived(messageTable: FollowPlusData)
 		messageTable.getFollowDataCallback(getFollowData)
 	end
 
-	if messageTable.setHideHeadCallback ~= nil then
-		setHideHead = messageTable.setHideHeadCallback
-	end
 	-- readLocation is a number representing where to retrive data from, anything above 0 is a replay file. Trying to access a replay file that doesn't exist does nothing.
 	if messageTable.readLocation then
 		readLocation = messageTable.readLocation
