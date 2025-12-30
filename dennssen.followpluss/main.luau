@@ -134,6 +134,9 @@ local function initializeProfiles()
 		isLeftHanded = false,
 		showQuests = true,
 		autoRecordReplays = false,
+		mouseSensitivity = 0.5,
+		controllerSensitivity = 0.5,
+		controllerDeadzone = 0.1,
 	}
 
 	-- remove every value in the root of the config that isn't profiles or lastUsedProfile
@@ -990,7 +993,7 @@ local showNameTags = profile.showNameTags
 camera.showNameTags = showNameTags
 local positionSmoothing = profile.positionSmoothing
 local cameraPositionSmoothing = positionSmoothing
-local rotationSmoothing = 0.5
+local rotationSmoothing = 0.1
 local cameraRotationSmoothing = rotationSmoothing
 camera.hideNearestHead = false
 local showQuests: boolean = profile.showQuests
@@ -1004,7 +1007,6 @@ local cameraTransition: boolean = false
 local THIRD_PERSON_OFFSET: Vec3 = Vec3.new(0, 0, 50)
 local cameraEulerOffset: Vec3 = stringToVec3(profile.cameraEulerOffset)
 local cameraPositionOffset: Vec3 = Vec3.zeroVector
-local distance = 0
 local flipTime: number = 0
 local maxFlipTime: number = 0.5
 local previousHandHeldRotationOffset: Quat = Quat.identity
@@ -1097,10 +1099,17 @@ local orbitRadius = 100000
 local orbitRotation: Vec3 = Vec3.new(0, -20, 0)
 local orbitRotationSpeed = 4
 
+-- Manual orbit
+local isManualOrbitEnabled: boolean = false
+local manualOrbitStartRotation: Quat = Quat.identity
+local manualOrbitEuler: Vec3 = Vec3.zeroVector
+
+local mouseSensitivity: number = profile.mouseSensitivity
+local controllerSensitivity: number = profile.controllerSensitivity
+local controllerDeadzone: number = profile.controllerDeadzone
+
 --  Mouse
 local rightMouseButton = Input.Key.RightMouseButton
-local xMouse = Input.Key.MouseX
-local yMouse = Input.Key.MouseY
 
 -- Debug
 local debugFaceTheBall: boolean = false
@@ -1263,6 +1272,7 @@ function topSettings()
 		end
 		for i = 1, #Replay.listLoaded() do
 			if Gui.selectable("Replay " .. i, i == readLocation) then
+				cachedGamemodeAmount = 0
 				readLocation = i
 			end
 		end
@@ -1559,6 +1569,22 @@ function followSettings()
 	if cameraMode == CameraMode.VelocityRotation or cameraMode == CameraMode.FaceTheBall then
 		Gui.endDisabled()
 	end
+
+	Gui.newLine()
+
+	if Gui.collapsingHeader("Manual Orbit") then
+		Gui.indent()
+		mouseSensitivity = Gui.sliderFloat("Mouse Sensitivity", mouseSensitivity, 0, 2)
+		mouseSensitivity = math.clamp(mouseSensitivity, 0, 2)
+
+		Gui.newLine()
+
+		controllerSensitivity = Gui.sliderFloat("Controller Sensitivity", controllerSensitivity, 0, 2)
+		controllerSensitivity = math.clamp(controllerSensitivity, 0, 2)
+		controllerDeadzone = Gui.sliderFloat("Controller Deadzone", controllerDeadzone, 0, 1)
+		controllerDeadzone = math.clamp(controllerDeadzone, 0, 1)
+		Gui.unindent()
+	end
 end
 
 function mainSettings()
@@ -1674,6 +1700,39 @@ function autoCameraSettings()
 	Gui.newLine()
 end
 
+function setConfigSettings(profileName: string)
+	config.profiles[profileName] = {
+		fieldOfView = cameraFOV,
+		targetPlayerName = targetPlayerName,
+		radius = radius,
+		positionSmoothing = positionSmoothing,
+		threshold = threshold,
+		autoGoalCam = autoGoalCam,
+		goalMode = goalMode,
+		distanceLerp = distanceLerp,
+		cameraMode = cameraMode,
+		showNameTags = showNameTags,
+		muteSelf = muteSelf,
+		gestureControls = gestureControls,
+		forwardGestureMode = forwardGestureMode,
+		upGestureMode = upGestureMode,
+		backwardsGestureMode = backwardsGestureMode,
+		readLocation = readLocation,
+		autoBall = autoBall,
+		simResolution = BallSim.resolutionScale,
+		simTimeLength = BallSim.pathLengthSeconds,
+		ballGoalMode = ballGoalMode,
+		cameraEulerOffset = tostring(cameraEulerOffset),
+		cameraPositionOffset = tostring(cameraPositionOffset),
+		isLeftHanded = isLeftHanded,
+		showQuests = showQuests,
+		autoRecordReplays = autoRecordReplays,
+		mouseSensitivity = mouseSensitivity,
+		controllerSensitivity = controllerSensitivity,
+		controllerDeadzone = controllerDeadzone,
+	}
+end
+
 function savingSettings()
 	if confirmationText ~= "" then
 		Gui.text(confirmationText)
@@ -1695,33 +1754,7 @@ function savingSettings()
 			else
 				confirmationText = `Successfully created: "{newProfileName}"`
 
-				config.profiles[newProfileName] = {
-					fieldOfView = cameraFOV,
-					targetPlayerName = targetPlayerName,
-					radius = radius,
-					positionSmoothing = positionSmoothing,
-					threshold = threshold,
-					autoGoalCam = autoGoalCam,
-					goalMode = goalMode,
-					distanceLerp = distanceLerp,
-					cameraMode = cameraMode,
-					showNameTags = showNameTags,
-					muteSelf = muteSelf,
-					gestureControls = gestureControls,
-					forwardGestureMode = forwardGestureMode,
-					upGestureMode = upGestureMode,
-					backwardsGestureMode = backwardsGestureMode,
-					readLocation = readLocation,
-					autoBall = autoBall,
-					simResolution = BallSim.resolutionScale,
-					simTimeLength = BallSim.pathLengthSeconds,
-					ballGoalMode = ballGoalMode,
-					cameraEulerOffset = tostring(cameraEulerOffset),
-					cameraPositionOffset = tostring(cameraPositionOffset),
-					isLeftHanded = isLeftHanded,
-					showQuests = showQuests,
-					autoRecordReplays = autoRecordReplays,
-				}
+				setConfigSettings(newProfileName)
 				lastUsedProfile = newProfileName
 				config.lastUsedProfile = lastUsedProfile
 				saveConfig()
@@ -1766,33 +1799,7 @@ function savingSettings()
 
 		if Gui.button("Save To Profile " .. Icon.Save) then
 			confirmationText = `Saved changes to profile: {lastUsedProfile}`
-			config.profiles[lastUsedProfile] = {
-				fieldOfView = cameraFOV,
-				targetPlayerName = targetPlayerName,
-				radius = radius,
-				positionSmoothing = positionSmoothing,
-				threshold = threshold,
-				autoGoalCam = autoGoalCam,
-				goalMode = goalMode,
-				distanceLerp = distanceLerp,
-				cameraMode = cameraMode,
-				showNameTags = showNameTags,
-				muteSelf = muteSelf,
-				gestureControls = gestureControls,
-				forwardGestureMode = forwardGestureMode,
-				upGestureMode = upGestureMode,
-				backwardsGestureMode = backwardsGestureMode,
-				readLocation = readLocation,
-				autoBall = autoBall,
-				simResolution = BallSim.resolutionScale,
-				simTimeLength = BallSim.pathLengthSeconds,
-				ballGoalMode = ballGoalMode,
-				cameraEulerOffset = tostring(cameraEulerOffset),
-				cameraPositionOffset = tostring(cameraPositionOffset),
-				isLeftHanded = isLeftHanded,
-				showQuests = showQuests,
-				autoRecordReplays = autoRecordReplays,
-			}
+			setConfigSettings(lastUsedProfile)
 			profile = config.profiles[lastUsedProfile]
 			saveConfig()
 		end
@@ -1818,10 +1825,24 @@ function debugSettings()
 		Gui.separatorText("Info")
 		Gui.indent()
 		if Gui.treeNode("Camera") then
-			Gui.text("Camera Position (smoothed): " .. tostring(camera.position))
-			Gui.text("Camera Position (real): " .. tostring(cameraPosition))
-			Gui.text("Camera Rotation (smoothed): " .. tostring(camera.rotation:euler()))
-			Gui.text("Camera Rotation (real): " .. tostring(cameraRotation:euler()))
+			Gui.text("Camera Position (global): " .. tostring(camera.position))
+			Gui.text("Camera Rotation (global): " .. tostring(camera.rotation:euler()))
+			if targetPlayer then
+				Gui.text(
+					`Camera Position (Local to player): {tostring(
+						targetPlayer.head.rotation:rotateVector(targetPlayer.head.position - camera.position)
+					)}`
+				)
+				Gui.text(
+					`Camera Rotation (Local to player): {tostring(
+						(targetPlayer.head.rotation:inverse() * camera.rotation):euler()
+					)}`
+				)
+			end
+			Gui.newLine()
+			Gui.text(`Camera Anchor: {tostring(cameraAnchor)}`)
+			Gui.text(`Camera Anchor Offset: {tostring(cameraAnchorOffset)}`)
+			Gui.text(`Camera Pivot Offset: {tostring(cameraPivotOffset)}`)
 			Gui.treePop()
 		end
 		if Gui.treeNode("Player") then
@@ -1895,6 +1916,11 @@ function debugSettings()
 			end
 			Gui.treePop()
 		end
+		if Gui.treeNode("Manual Orbit") then
+			Gui.text(`Enabled: {isManualOrbitEnabled}`)
+			Gui.text(`Rotation Euler: {tostring(manualOrbitEuler)}`)
+			Gui.treePop()
+		end
 		if Gui.treeNode("Recording") then
 			debugAutoRecord = Gui.checkbox("Debug Auto Record", debugAutoRecord)
 			debugStartRecordDelay = Gui.sliderFloat("Start Delay", debugStartRecordDelay, 0, 10)
@@ -1937,7 +1963,6 @@ function debugSettings()
 			Gui.treePop()
 		end
 		if Gui.treeNode("Other") then
-			Gui.text("Distance: " .. tostring(distance))
 			Gui.text("Ball Distance: " .. tostring(Util.getDist(headPosition, ballPosition)))
 			Gui.text("Is Recording Replay: " .. tostring(isRecordingReplay))
 			Gui.treePop()
@@ -2047,46 +2072,64 @@ function updatePlayerData(player: ReplayPlayer, frame: ReplayFrame)
 	end
 end
 
-function mouseRotationOffset()
-	cameraEulerOffset += Vec3.new(0, Input.getAnalog(yMouse), Input.getAnalog(xMouse))
-end
-
-function rotationPivotPosition(anchor: Vec3, anchorOffset: Vec3, rotation: Quat, radius: number)
-	local rotationQuat = rotation * Quat.fromEuler(cameraEulerOffset.x, cameraEulerOffset.y, cameraEulerOffset.z)
-	radius *= 10
-	local cameraDirection = rotationQuat:getForwardVector()
-
-	setCameraPosition(anchor, anchorOffset, Util.negateVec3(cameraDirection) * radius)
-end
-
-function velocityPivotPosition(anchor: Vec3, anchorOffset: Vec3, velocity: Vec3, radius: number, ball: boolean)
-	radius *= 10
-
-	local cameraDirection = velocity:getSafeNormal()
-	if not ball then
-		cameraDirection = Util.negateVec3(cameraDirection)
+function toggleManualOrbit(toggle: boolean)
+	if toggle then
+		manualOrbitStartRotation = gravity.upRotation
+		manualOrbitEuler = (gravity.upRotation:inverse() * cameraRotation):euler()
 	end
 
-	setCameraPosition(anchor, anchorOffset, cameraDirection * radius)
+	isManualOrbitEnabled = toggle
 end
 
-function faceTheBallPivotPosition(
-	anchor: Vec3,
-	anchorOffset: Vec3,
-	playerBox: BoxType,
-	ballPosition: Vec3,
-	radius: number
-)
+function checkManualOrbitInput()
+	if Input.getKeyDown(rightMouseButton) then
+		toggleManualOrbit(true)
+	elseif Input.getKeyUp(rightMouseButton) then
+		toggleManualOrbit(false)
+	end
+
+	if
+		not isManualOrbitEnabled
+		and Vec2.new(Input.getAnalog(Input.Gamepad.RightX), Input.getAnalog(Input.Gamepad.RightY)):length()
+			> controllerDeadzone
+	then
+		toggleManualOrbit(true)
+	end
+
+	if Input.getKeyDown(Input.Gamepad.RightThumbstick) then
+		toggleManualOrbit(false)
+	end
+
+	if cameraMode == CameraMode.FirstPerson or cameraMode == CameraMode.HandHeld then
+		toggleManualOrbit(false)
+	end
+end
+
+function rotationPivotPosition(rotation: Quat): Quat
+	local rotationQuat = rotation * Quat.fromEuler(cameraEulerOffset.x, cameraEulerOffset.y, cameraEulerOffset.z)
+
+	return rotationQuat
+end
+
+function velocityPivotPosition(velocity: Vec3): Quat
+	local velocityDirection = velocity:getSafeNormal()
+	local rotation = Quat.fromXZ(velocityDirection, gravityUpDirection)
+
+	return rotation
+end
+
+function faceTheBallPivotPosition(playerBox: BoxType, ballPosition: Vec3): Quat
 	local closestPointToBall = playerBox:clampPointToBox(ballPosition, false)
 
 	local direction = Util.getForward(closestPointToBall, ballPosition)
-	radius *= 10
 
 	if debugFaceTheBall then
 		WorldDraw.drawLine(closestPointToBall, closestPointToBall + (direction * 50), 0, 1, 0, 10, 0)
 	end
 
-	setCameraPosition(anchor, anchorOffset, Util.negateVec3(direction) * radius)
+	local rotation = Quat.fromXZ(direction, gravityUpDirection)
+
+	return rotation
 end
 
 function updateBallData(ball: ReplayBall, seconds: number)
@@ -2333,7 +2376,13 @@ function grabbingCamera(player: ReplayPlayer, grabHand: Transform)
 	end
 end
 
-function ballCam(radius: number, rotation: Quat)
+function removeRoll(rotation: Quat, upDirection: Vec3): Quat
+	local forward = rotation:getForwardVector()
+
+	return Util.lookAt(Vec3.zeroVector, forward, upDirection)
+end
+
+function ballCam(radius: number)
 	if instaRotateBall then
 		toggleSmoothing(false, false)
 		instaRotateBall = false
@@ -2347,9 +2396,43 @@ function ballCam(radius: number, rotation: Quat)
 		ballCamRadius = 10
 	end
 
-	setCameraRotation(Util.lookAt(cameraPosition, ballPosition, gravityUpDirection))
+	local rotation = velocityPivotPosition(ballVelocity)
+	setCameraRotation(rotation)
 	hidePlayerHead = false
-	velocityPivotPosition(ballPosition, Vec3.zeroVector, ballVelocity, ballCamRadius, false)
+
+	local direction = Util.negateVec3(rotation:getForwardVector())
+
+	setCameraPosition(ballPosition, Vec3.zeroVector, direction * radius * 10)
+end
+
+function manualOrbit(position: Vec3, offset: Vec3)
+	local input: Vec3
+
+	if Input.getKey(rightMouseButton) then
+		local mouseDelta = (Input.getMouseDelta() * 5) * mouseSensitivity
+		input = Vec3.new(0, mouseDelta.y, mouseDelta.x)
+	else
+		local controllerInput = Vec2.new(Input.getAnalog(Input.Gamepad.RightX), Input.getAnalog(Input.Gamepad.RightY))
+		if controllerInput:length() < controllerDeadzone then
+			controllerInput = Vec2.zeroVector
+		end
+
+		local rightJoy = (controllerInput * 5) * controllerSensitivity
+		input = Vec3.new(0, rightJoy.y, rightJoy.x)
+	end
+
+	manualOrbitEuler += input
+
+	manualOrbitEuler = Vec3.new(manualOrbitEuler.x, math.clamp(manualOrbitEuler.y, -89.9, 89.9), manualOrbitEuler.z)
+
+	local rotation = manualOrbitStartRotation * Util.quatFromVec3(manualOrbitEuler)
+	local direction = Util.negateVec3(rotation:getForwardVector())
+
+	setCameraRotation(rotation)
+	hidePlayerHead = false
+
+	local adjustedRadius = radius * 10
+	setCameraPosition(position, offset, direction * adjustedRadius)
 end
 
 function firstPerson()
@@ -2415,31 +2498,45 @@ function thirdPerson(position: Vec3, offsetPosition: Vec3?, rotation: Quat, smar
 		anchorOffset = offsetPosition
 	end
 
-	if Input.getKey(rightMouseButton) then
-		smartSwitch = false
-		mouseRotationOffset()
+	if isManualOrbitEnabled then
+		manualOrbit(position, anchorOffset)
+		return
 	end
 
-	setCameraRotation(Util.lookAt(cameraPosition, position, gravityUpDirection))
+	local straightHeadRotation = removeRoll(rotationPivotPosition(rotation), gravityUpDirection)
+
+	setCameraRotation(straightHeadRotation)
 	hidePlayerHead = false
-	rotationPivotPosition(position, anchorOffset, rotation, radius)
+
+	local direction = Util.negateVec3(straightHeadRotation:getForwardVector())
+
+	setCameraPosition(position, anchorOffset, direction * radius * 10)
 end
 
-function thirdPersonVelocity(position: Vec3, velocity: Vec3, rotation: Quat)
+function thirdPersonVelocity(position: Vec3, velocity: Vec3, headRotation: Quat)
 	if not cameraTransition then
 		toggleSmoothing(true, true)
 	end
 
-	local offsetPosition: Vec3 = rotation:rotateVector(THIRD_PERSON_OFFSET)
+	local offsetPosition: Vec3 = gravity.upRotation:rotateVector(THIRD_PERSON_OFFSET)
 
 	if velocity:length() < 600 then
-		thirdPerson(position, offsetPosition + cameraPositionOffset, rotation, true)
+		thirdPerson(position, offsetPosition + cameraPositionOffset, headRotation, true)
 		return
 	end
 
-	setCameraRotation(Util.lookAt(cameraPosition, position, gravityUpDirection))
+	if isManualOrbitEnabled then
+		manualOrbit(position, offsetPosition)
+		return
+	end
+
+	local rotation = velocityPivotPosition(velocity)
+
+	setCameraRotation(rotation)
 	hidePlayerHead = false
-	velocityPivotPosition(position, offsetPosition, velocity, radius, false)
+
+	local direction = Util.negateVec3(rotation:getForwardVector())
+	setCameraPosition(position, offsetPosition, direction * radius * 10)
 end
 
 function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
@@ -2449,6 +2546,11 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 
 	local offset = player.head.rotation:rotateVector(offsetPosition)
 	local position = player.head.position
+
+	if isManualOrbitEnabled then
+		manualOrbit(position, offset)
+		return
+	end
 
 	local horizontalVelocity = player.velocity - player.velocity:projectOnTo(gravity.upDirection)
 
@@ -2477,9 +2579,13 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 		playerBox:render(0.7, 0.15, 0.15)
 	end
 
-	setCameraRotation(Util.lookAt(cameraPosition, position, gravityUpDirection))
+	local rotation = faceTheBallPivotPosition(playerBox, ballPosition)
+
+	setCameraRotation(rotation)
 	hidePlayerHead = false
-	faceTheBallPivotPosition(position, offset, playerBox, ballPosition, radius)
+
+	local direction = Util.negateVec3(rotation:getForwardVector())
+	setCameraPosition(position, offset, direction * radius * 10)
 end
 
 function checkFlip(rightHandTransform: Transform, rightHandPosebits, leftHandTransform: Transform, leftHandPosebits)
@@ -2649,7 +2755,7 @@ function withPlayer(player: ReplayPlayer)
 	if autoBall then
 		checkForBallFollow(player)
 		if isFollowingBall then
-			ballCam(30, Quat.identity)
+			ballCam(30)
 			return
 		end
 	elseif isFollowingBall then
@@ -2669,6 +2775,8 @@ function withPlayer(player: ReplayPlayer)
 	elseif cameraTransition then
 		cameraTransition = false
 	end
+
+	checkManualOrbitInput()
 
 	camera.fieldOfView = cameraFOV
 	if radius == 0 and cameraMode ~= CameraMode.HandHeld then
@@ -3090,6 +3198,9 @@ type FollowPlusData = {
 	hideNearestHead: boolean?,
 	showQuests: boolean?,
 	autoRecordReplays: boolean?,
+	mouseSensitivity: number?,
+	controllerSensitivity: number?,
+	controllerDeadzone: number?,
 }
 
 function getFollowData(): FollowPlusData
@@ -3121,6 +3232,9 @@ function getFollowData(): FollowPlusData
 		hideNearestHead = hidePlayerHead,
 		showQuests = showQuests,
 		autoRecordReplays = autoRecordReplays,
+		mouseSensitivity = mouseSensitivity,
+		controllerSensitivity = controllerSensitivity,
+		controllerDeadzone = controllerDeadzone,
 	}
 
 	return data
@@ -3331,5 +3445,15 @@ function onMessageReceived(messageTable: FollowPlusData)
 	if messageTable.hideNearestHead ~= nil then
 		hidePlayerHead = messageTable.hideNearestHead
 		camera.hideNearestHead = hidePlayerHead
+	end
+
+	if messageTable.mouseSensitivity then
+		mouseSensitivity = math.clamp(messageTable.mouseSensitivity, 0, 2)
+	end
+	if messageTable.controllerSensitivity then
+		controllerSensitivity = math.clamp(messageTable.controllerSensitivity, 0, 2)
+	end
+	if messageTable.controllerDeadzone then
+		controllerDeadzone = math.clamp(messageTable.controllerDeadzone, 0, 1)
 	end
 end
