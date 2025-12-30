@@ -1201,6 +1201,7 @@ function topSettings()
 		end
 		for i = 1, #Replay.listLoaded() do
 			if Gui.selectable("Replay " .. i, i == readLocation) then
+				cachedGamemodeAmount = 0
 				readLocation = i
 			end
 		end
