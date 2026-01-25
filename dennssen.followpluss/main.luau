@@ -1125,20 +1125,35 @@ function updateVariables(profileName)
 	radius = profile.radius
 	distanceLerp = profile.distanceLerp
 	readLocation = profile.readLocation
-	cameraMode = profile.cameraMode
-	activeCameraMode = cameraMode
-	cameraFOV = profile.fieldOfView
-	goalMode = profile.goalMode
+	ballGoalMode = profile.ballGoalMode
+	cameraPositionOffset = stringToVec3(profile.cameraPositionOffset)
+	cameraEulerOffset = stringToVec3(profile.cameraEulerOffset)
 	showNameTags = profile.showNameTags
-	muteSelf = profile.muteSelf
 	threshold = profile.threshold
+	cameraFOV = profile.fieldOfView
 	positionSmoothing = profile.positionSmoothing
 	autoGoalCam = profile.autoGoalCam
+	goalMode = profile.goalMode
 	autoBall = profile.autoBall
+	BallSim.resolutionScale = profile.simResolutionScale
+	BallSim.pathLengthSeconds = profile.simTimeLength
 	targetPlayerName = profile.targetPlayerName
-	ballGoalMode = profile.ballGoalMode
-	cameraEulerOffset = stringToVec3(profile.cameraEulerOffset)
-	cameraPositionOffset = stringToVec3(profile.cameraPositionOffset)
+	cameraMode = profile.cameraMode
+	muteSelf = profile.muteSelf
+	gestureControls = profile.gestureControls
+	forwardGestureMode = profile.forwardGestureMode
+	upGestureMode = profile.upGestureMode
+	backwardsGestureMode = profile.backwardsGestureMode
+	focusedArena = profile.focusedArena
+	isLeftHanded = profile.isLeftHanded
+	showQuests = profile.showQuests
+	autoRecordReplays = profile.autoRecordReplays
+	mouseSensitivity = profile.mouseSensitivity
+	controllerSensitivity = profile.controllerSensitivity
+	controllerDeadzone = profile.controllerDeadzone
+	isBallOutlineEnabled = profile.isBallOutlineEnabled
+
+	activeCameraMode = cameraMode
 
 	setTargetPlayer(Util.getReplayFrameFromIndex(readLocation):getPlayerByName(targetPlayerName))
 end
