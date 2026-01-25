@@ -137,6 +137,7 @@ local function initializeProfiles()
 		mouseSensitivity = 0.5,
 		controllerSensitivity = 0.5,
 		controllerDeadzone = 0.1,
+		isBallOutlineEnabled = true,
 	}
 
 	-- remove every value in the root of the config that isn't profiles or lastUsedProfile
@@ -1017,6 +1018,7 @@ local gravityUpDirection: Vec3 = Vec3.zeroVector
 
 -- ball outline
 local ui: HUD = HUD.new("", 1920, 1080, 10)
+local isBallOutlineEnabled: boolean = profile.isBallOutlineEnabled
 
 -- gui
 local listActive = false
@@ -1343,6 +1345,13 @@ function checkboxSettings()
 	Gui.sameLine()
 	isLeftHanded = Gui.checkbox(generateAsterisk(isLeftHandedLabel, isLeftHanded ~= profile.isLeftHanded), isLeftHanded)
 	Gui.setItemTooltip("Makes you left handed | Used for Hand Held mode")
+
+	Gui.sameLine()
+	isBallOutlineEnabled = Gui.checkbox(
+		generateAsterisk("Ball Outline", isBallOutlineEnabled ~= profile.isBallOutlineEnabled),
+		isBallOutlineEnabled
+	)
+	Gui.setItemTooltip("Enables/Disables the outline around the arena ball")
 
 	--[[Gui.sameLine()
 	focusedArena = Gui.checkbox(generateAsterisk(focusedArenaLabel, focusedArena ~= profile.focusedArena), focusedArena)
@@ -1730,6 +1739,7 @@ function setConfigSettings(profileName: string)
 		mouseSensitivity = mouseSensitivity,
 		controllerSensitivity = controllerSensitivity,
 		controllerDeadzone = controllerDeadzone,
+		isBallOutlineEnabled = isBallOutlineEnabled,
 	}
 end
 
@@ -2921,6 +2931,10 @@ function configureVOIP()
 end
 
 function drawBallOutline(ball: ReplayBall)
+	if isBallOutlineEnabled then
+		return
+	end
+
 	ui:tick()
 
 	local ballPosition: Vec3 = ball.transform.position
@@ -3175,6 +3189,7 @@ type FollowPlusData = {
 	showNameTags: boolean?,
 	isLeftHanded: boolean?,
 	muteSelf: boolean?,
+	isBallOutlineEnabled: boolean?,
 	targetPlayer: ReplayPlayer?,
 	targetPlayerName: string?,
 	positionSmoothing: number?,
@@ -3347,6 +3362,10 @@ function onMessageReceived(messageTable: FollowPlusData)
 		if Settings.getLuauReplayControlAllowed() then
 			autoRecordReplays = messageTable.autoRecordReplays
 		end
+	end
+	-- isBallOutlineEnables is a boolean that enables/disables the ball outline around the arena ball
+	if messageTable.isBallOutlineEnabled ~= nil then
+		isBallOutlineEnabled = messageTable.isBallOutlineEnabled
 	end
 	-- targetPlayer is a ReplayPlayer of the player the camera will follow. By setting targetPlayer it will attempt to switch to that player. If the player doesn't exist it will keep the current player as the targetPlayer.
 	if messageTable.targetPlayer then
