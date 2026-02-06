@@ -638,13 +638,13 @@ local Arena4v4 = {} :: Arena4v4
 Arena4v4.__index = Arena4v4
 setmetatable(Arena4v4, { __index = FollowArena })
 
-Arena4v4.homeRotationOffset = Quat.fromEuler(0, 0, -90)
-Arena4v4.awayRotationOffset = Quat.fromEuler(0, 0, 90)
-Arena4v4.boxSize = Vec3.new(6110, 8400, 1490)
-Arena4v4.boxOffset = Vec3.new(0, 0, 600)
-Arena4v4.centerBoxOffset = Vec3.new(0, 0, 250)
-Arena4v4.goalBoxSize = Vec3.new(200, 450, 225)
-Arena4v4.goalPositionOffset = Vec3.new(4075, 0, 175)
+Arena4v4.homeRotationOffset = Quat.fromEuler(0, 0, 90)
+Arena4v4.awayRotationOffset = Quat.fromEuler(0, 0, -90)
+Arena4v4.boxSize = Vec3.new(6715, 8400, 1490)
+Arena4v4.boxOffset = Vec3.new(0, 0, 685)
+Arena4v4.centerBoxOffset = Vec3.new(0, 0, 435)
+Arena4v4.goalBoxSize = Vec3.new(165, 450, 225)
+Arena4v4.goalPositionOffset = Vec3.new(4085, 0, 270)
 
 function Arena4v4.new(gamemode: ModuleStateSpectatorLuaApi): FollowArena
 	local self: FollowArena = setmetatable(Arena.new(gamemode, readLocation), Arena4v4) :: any
@@ -654,9 +654,11 @@ function Arena4v4.new(gamemode: ModuleStateSpectatorLuaApi): FollowArena
 
 	if self.slotId:find("TKB") then
 		name = self.slotId:gsub("TKB_", "")
-	else
+	elseif self.slotId:find("_") then
 		local nameEnd = self.slotId:find("_") :: number
 		name = `{self.slotId:sub(1, nameEnd - 1)} {self.slotId:sub(self.slotId:len() - 2)}`
+	else
+		name = self.slotId
 	end
 
 	self.name = name
@@ -953,6 +955,7 @@ function getArenas(): { [any]: FollowArena }
 		elseif
 			(slotId:find("Jakeball") or slotId:find("Driftball"))
 			or (slotId:find("TKB") and slotId:find("Driftplex") and not slotId:find("Full"))
+			or (slotId:find("Beta") or slotId:find("Gamma") or slotId:find("Alpha"))
 		then
 			local arena: FollowArena = Arena4v4.new(gamemode, readLocation) :: Arena4v4
 			arenas[arena.name] = arena
