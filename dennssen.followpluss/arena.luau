@@ -7,6 +7,7 @@ local Util = require("util")
 
 export type ArenaTeam<T = {}> = {
 	teamIndex: number,
+	color: LinearColor,
 	previousScore: number,
 	score: number,
 	scoreIncrease: boolean,
@@ -60,6 +61,7 @@ export type Arena<ArenaData = {}, HomeData = {}, AwayData = {}> = {
 
 	new: (gamemode: ModuleStateSpectatorLuaApi, frameIndex: number) -> Arena<ArenaData, HomeData, AwayData>,
 	getArenaBall: (self: Arena<ArenaData, HomeData, AwayData>) -> (),
+	getTeamColors: (self: Arena<ArenaData, HomeData, AwayData>) -> (),
 	tick: (self: Arena<ArenaData, HomeData, AwayData>) -> (),
 	onGameStart: (self: Arena<ArenaData, HomeData, AwayData>) -> (),
 	onRoundStart: (self: Arena<ArenaData, HomeData, AwayData>) -> (),
@@ -102,6 +104,7 @@ function Arena.new(gamemode: ModuleStateSpectatorLuaApi, frameIndex: number): Ar
 
 	self.home = {
 		teamIndex = Util.TeamIndex.HomeTeam,
+		color = LinearColor.White,
 		previousScore = 0,
 		score = 0,
 		scoreIncrease = false,
@@ -120,6 +123,7 @@ function Arena.new(gamemode: ModuleStateSpectatorLuaApi, frameIndex: number): Ar
 
 	self.away = {
 		teamIndex = Util.TeamIndex.AwayTeam,
+		color = LinearColor.White,
 		previousScore = 0,
 		score = 0,
 		scoreIncrease = false,
@@ -149,7 +153,7 @@ end
 function Arena:getArenaBall()
 	local balls = self.frame.balls
 	local closestBallDistance = math.huge
-	local clostestBall: ReplayBall = nil
+	local closestBall: ReplayBall = nil
 	for i in balls do
 		local ball = balls[i]
 
@@ -163,14 +167,21 @@ function Arena:getArenaBall()
 		local distance = Util.getDist(self.transform.position, ball.transform.position)
 		if distance < closestBallDistance then
 			closestBallDistance = distance
-			clostestBall = ball
+			closestBall = ball
 		end
 	end
-	return clostestBall
+	return closestBall
+end
+
+function Arena:getTeamColors()
+	local teamColors: { TeamColor } = self.gamemode:getTeamColorsArray()
+	self.home.color = teamColors[1].primary
+	self.away.color = teamColors[2].primary
 end
 
 function Arena:tick()
 	self.frame = Util.getReplayFrameFromIndex(self.frameIndex)
+	self:getTeamColors()
 	self.ball = self:getArenaBall()
 
 	if self.preTickHook then
