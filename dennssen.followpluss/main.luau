@@ -2949,7 +2949,7 @@ function configureVOIP()
 end
 
 function drawBallOutline(ball: ReplayBall)
-	if isBallOutlineEnabled then
+	if not isBallOutlineEnabled then
 		return
 	end
 
