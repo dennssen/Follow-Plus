@@ -1,5 +1,5 @@
 --!strict
-local _version: string = "1.13.5"
+local _version: string = "1.13.6"
 
 -- Feature:
 -- When using Head Rotation (possibly other 3rd person modes) and hold down right click, the player gets full control over the rotation of the 3rd person mode by using their mouse until they let go of right click.
@@ -946,7 +946,12 @@ function getArenas(): { [any]: FollowArena }
 	local gamemodes = SpectatorGamemodes.listGamemodes()
 	for _, gamemode in gamemodes do
 		local slotId = gamemode:getSlotId()
-		if slotId:find("TKB") and not slotId:find("Driftplex") and not slotId:find("Full") then
+		if
+			slotId:find("TKB")
+			and not slotId:find("Driftplex")
+			and not slotId:find("Full")
+			and not slotId:find("Playground")
+		then
 			local arena: FollowArena = Arena3v3.new(gamemode, readLocation) :: Arena3v3
 			arenas[arena.name] = arena
 		elseif slotId:find("Soccer") then
