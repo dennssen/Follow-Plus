@@ -175,8 +175,14 @@ end
 
 function Arena:getTeamColors()
 	local teamColors: { TeamColor } = self.gamemode:getTeamColorsArray()
-	self.home.color = teamColors[1].primary
-	self.away.color = teamColors[2].primary
+
+	if teamColors[1].primary then
+		self.home.color = teamColors[1].primary
+	end
+
+	if teamColors[2].primary then
+		self.away.color = teamColors[2].primary
+	end
 end
 
 function Arena:tick()
