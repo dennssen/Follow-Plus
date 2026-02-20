@@ -3025,12 +3025,15 @@ function anchorCollision(anchorPosition: Vec3, anchorOffsetPosition: Vec3): Vec3
 	local anchor = anchorPosition + anchorOffsetPosition
 
 	if collisions and anchorOffsetPosition ~= Vec3.zeroVector then
-		local offsetForwards: Vec3 = Util.getForward(anchorPosition, anchorPosition + anchorOffsetPosition)
-		local rayEnd: Vec3 = anchorPosition + (offsetForwards * (anchorOffsetPosition:length() + 10))
+		local anchorOffsetLength: number = anchorOffsetPosition:length()
+		local offsetForwards: Vec3 = Util.getForward(anchorPosition, anchor)
+		local rayEnd: Vec3 = anchorPosition + (offsetForwards * (anchorOffsetLength + 10))
 		local hit: RayHit = camera:castRay(anchorPosition, rayEnd)
 
 		if hit.successful then
 			local hitDistance: number = Util.getDist(rayEnd, hit.position)
+			-- ensure the collision doesn't make the camera go further than the offset position.
+			hitDistance = math.min(hitDistance, anchorOffsetLength)
 			anchor += (offsetForwards * -hitDistance)
 		end
 	end
@@ -3048,11 +3051,13 @@ function moveCamera()
 
 	-- Collision
 	if collisions and cameraPivotOffset ~= Vec3.zeroVector then
+		local cameraPivotLength: number = cameraPivotOffset:length()
 		local cameraForwards = Util.getForward(anchor, cameraPosition)
 		local rayEnd: Vec3 = cameraPosition + (cameraForwards * 10)
 		local hit: RayHit = camera:castRay(anchor, rayEnd)
 		if hit.successful then
 			local hitDistance: number = Util.getDist(rayEnd, hit.position)
+			hitDistance = math.min(hitDistance, cameraPivotLength)
 			local radiusCm = radius * 10
 			local thresholdCm = threshold * 10
 			if radiusCm - hitDistance < thresholdCm then
