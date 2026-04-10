@@ -2599,7 +2599,7 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 		playerChestRotation = Quat.fromXZ(alignedHeadDirection, upDirection)
 	end
 
-	local verticalOffset = player.root.rotation:rotateVector(Vec3.new(0, 0, -50))
+	local verticalOffset = player.root.rotation:rotateVector(Vec3.new(0, 0, -25))
 	local horizontalOffset = playerChestRotation:getForwardVector()
 		* -math.clamp(
 			player.velocity:length() * math.sign(playerChestRotation:getForwardVector():dot(horizontalVelocity)),
