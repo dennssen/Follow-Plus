@@ -2585,16 +2585,18 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 		return
 	end
 
-	local horizontalVelocity = player.velocity - player.velocity:projectOnTo(gravity.upDirection)
+	local upDirection: Vec3 = player.root.rotation:getUpVector()
+
+	local horizontalVelocity = player.velocity - player.velocity:projectOnTo(upDirection)
 
 	local headForward = player.head.rotation:getForwardVector()
-	local alignedHeadDirection = headForward - gravity.upDirection * headForward:dot(gravity.upDirection)
+	local alignedHeadDirection = headForward - upDirection * headForward:dot(upDirection)
 	alignedHeadDirection = alignedHeadDirection:normalize()
 
 	local directionAlignment = playerChestRotation:getForwardVector():dot(alignedHeadDirection)
 
 	if directionAlignment >= -0.9 or directionAlignment <= 0.9 then
-		playerChestRotation = Quat.fromXZ(alignedHeadDirection, gravity.upDirection)
+		playerChestRotation = Quat.fromXZ(alignedHeadDirection, upDirection)
 	end
 
 	local verticalOffset = player.root.rotation:rotateVector(Vec3.new(0, 0, -50))
