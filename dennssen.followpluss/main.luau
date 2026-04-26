@@ -2806,6 +2806,7 @@ function withPlayer(player: ReplayPlayer)
 
 	if previousCameraMode ~= activeCameraMode or previousTargetPlayerId ~= player.playerId then
 		toggleSmoothing(false, false)
+		toggleManualOrbit(false)
 		cameraTransition = true
 	elseif cameraTransition then
 		cameraTransition = false
