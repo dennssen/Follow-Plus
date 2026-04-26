@@ -1202,6 +1202,7 @@ function onTransitionBegin()
 
 	if wasFollowed then
 		wasFollowed = false
+		toggleManualOrbit(false)
 		updateVariables(lastUsedProfile)
 
 		-- transition to orbit
