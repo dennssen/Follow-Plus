@@ -3125,8 +3125,8 @@ function mainProcess(dt: number, followedBy: SpectatorCamera?)
 	end
 
 	local isFollowed: boolean = followedBy ~= nil
-	if isFollowed and not wasFollowed then
-		onFollow()
+	if not isFollowed and wasFollowed then
+		onStopFollow()
 	end
 	wasFollowed = isFollowed
 
@@ -3220,7 +3220,7 @@ function tick(dt)
 	mainProcess(dt)
 end
 
-function onFollow()
+function onStopFollow()
 	toggleManualOrbit(false)
 end
 
@@ -3241,7 +3241,7 @@ end
 type FollowPlusData = {
 	-- Callbacks
 	versionCallback: (string) -> ()?,
-	getMainProcessCallback: ((number, SpectatorCamera) -> ()) -> ()?,
+	getMainProcessCallback: ((number, SpectatorCamera?) -> ()) -> ()?,
 	guiCallback: (() -> ()) -> ()?,
 	topSettingsCallback: (() -> ()) -> ()?,
 	checkboxSettingsCallback: (() -> ()) -> ()?,
