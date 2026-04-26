@@ -1444,7 +1444,7 @@ function playerSettings()
 			if playerAmount == 0 then
 				Gui.selectable("No players in the server...", false)
 			elseif searchAmount == 0 then
-				Gui.selectable(`No players with a name like {targetPlayerName}...`, false)
+				Gui.selectable(`No players with a name like '{targetPlayerName}'...`, false)
 			end
 
 			Gui.endListBox()
