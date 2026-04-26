@@ -1198,7 +1198,6 @@ function onTransitionBegin()
 
 	if wasFollowed then
 		wasFollowed = false
-		toggleManualOrbit(false)
 		updateVariables(lastUsedProfile)
 
 		-- transition to orbit
@@ -3126,6 +3125,10 @@ function mainProcess(dt: number, followedBy: SpectatorCamera?)
 	end
 
 	local isFollowed: boolean = followedBy ~= nil
+	if isFollowed and not wasFollowed then
+		onFollow()
+	end
+	wasFollowed = isFollowed
 
 	if not camera.isActive and not isFollowed then
 		alwaysTick = nil
@@ -3215,6 +3218,10 @@ function tick(dt)
 	end
 
 	mainProcess(dt)
+end
+
+function onFollow()
+	toggleManualOrbit(false)
 end
 
 function onExit()
@@ -3340,9 +3347,6 @@ function onMessageReceived(messageTable: FollowPlusData)
 	if not hasTickedOnce then
 		tick(0)
 	end
-
-	-- I set wasFollowed to true if a message was recieved to make sure the variables get reset once the camera is used standalone again
-	wasFollowed = true
 
 	-- showQuests is a boolean that shows quests for the followed player
 	if messageTable.showQuests ~= nil then
