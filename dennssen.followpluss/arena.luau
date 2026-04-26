@@ -5,6 +5,12 @@ type BoxType = typeof(Box)
 
 local Util = require("util")
 
+export type ArenaGoal = {
+	position: Vec3,
+	rotation: Quat,
+	box: BoxType,
+}
+
 export type ArenaTeam<T = {}> = {
 	teamIndex: number,
 	color: LinearColor,
@@ -14,11 +20,7 @@ export type ArenaTeam<T = {}> = {
 	previousRoundsWon: number,
 	roundsWon: number,
 	roundsWonIncrease: boolean,
-	goal: {
-		position: Vec3,
-		rotation: Quat,
-		box: BoxType,
-	},
+	goal: ArenaGoal,
 	players: { ReplayPlayer },
 	sizeChange: boolean,
 	data: T,
