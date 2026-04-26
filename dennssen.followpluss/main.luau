@@ -1410,7 +1410,9 @@ function playerSettings()
 	if listActive then
 		Gui.indent()
 		if Gui.beginListBox("Player List") then
-			for i = 1, #frame.players do
+			local playerAmount: number = #frame.players
+			local searchAmount: number = 0
+			for i = 1, playerAmount do
 				local player = frame.players[i]
 				local isSelected = false
 
@@ -1430,12 +1432,21 @@ function playerSettings()
 					continue
 				end
 
+				searchAmount += 1
+
 				if
 					Gui.selectable(tostring(player.playerName) .. "[" .. tostring(player.playerId) .. "]", isSelected)
 				then
 					setTargetPlayer(player)
 				end
 			end
+
+			if playerAmount == 0 then
+				Gui.selectable("No players in the server...", false)
+			elseif searchAmount == 0 then
+				Gui.selectable(`No players with a name like {targetPlayerName}...`, false)
+			end
+
 			Gui.endListBox()
 		end
 
