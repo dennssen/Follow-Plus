@@ -1189,10 +1189,6 @@ function main()
 end
 
 function onTransitionBegin()
-	if camera.isFollowed then
-		toggleSmoothing(false, false)
-	end
-
 	alwaysTick = true
 	WorldDraw.clear()
 
