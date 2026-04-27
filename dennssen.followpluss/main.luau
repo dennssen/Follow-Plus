@@ -1,5 +1,5 @@
 --!strict
-local _version: string = "1.13.3"
+local _version: string = "1.14.0"
 
 -- Feature:
 -- When using Head Rotation (possibly other 3rd person modes) and hold down right click, the player gets full control over the rotation of the 3rd person mode by using their mouse until they let go of right click.
@@ -23,9 +23,11 @@ type GoalCamData = {
 
 local Arena = require("arena")
 type Arena<ArenaData, HomeData, AwayData> = Arena.Arena<ArenaData, HomeData, AwayData>
+type ArenaGoal = Arena.ArenaGoal
 type FollowArena = Arena<{}, GoalCamData, GoalCamData> & {
 	checkGoalCam: (self: FollowArena, player: ReplayPlayer) -> boolean,
 	goalCam: (self: FollowArena, goalPosition: Vec3, goalRotation: Quat) -> (),
+	getClosestGoalTransform: (self: FollowArena, position: Vec3) -> ArenaGoal,
 }
 
 local HUD = require("hud")
@@ -41,7 +43,8 @@ local CameraMode = {
 	HeadRotation = 2,
 	VelocityRotation = 3,
 	FaceTheBall = 4,
-	HandHeld = 5,
+	BallCam = 5,
+	HandHeld = 6,
 }
 
 local collisions: boolean = true
@@ -324,13 +327,13 @@ local distanceLerp = profile.distanceLerp
 -- ball
 local ballPosition: Vec3 = Vec3.zeroVector
 local ballRotation: Quat = Quat.identity
+local lastBallCamRotation: Quat = Quat.identity
 local ballVelocity: Vec3 = Vec3.zeroVector
 local ballArena: number = nil
 local autoBall = profile.autoBall
 BallSim.resolutionScale = profile.simResolutionScale
 BallSim.pathLengthSeconds = profile.simTimeLength
 local doneOnceBall = false
-local instaRotateBall = false
 
 local isFollowingBall: boolean = false
 local followBallStart: number = 0
@@ -376,6 +379,17 @@ local cachedGamemodeAmount: number = 0
 local FollowArena = {} :: FollowArena
 FollowArena.__index = FollowArena
 setmetatable(FollowArena, { __index = Arena })
+
+function FollowArena:getClosestGoalTransform(position: Vec3): ArenaGoal
+	local homeGoalDist: number = Vec3.distance(self.home.goal.position, position)
+	local awayGoalDist: number = Vec3.distance(self.away.goal.position, position)
+
+	if homeGoalDist < awayGoalDist then
+		return self.home.goal
+	else
+		return self.away.goal
+	end
+end
 
 function FollowArena:onRoundStartHook()
 	if not targetPlayer or targetPlayer.teamIndex == Util.TeamIndex.NoTeam then
@@ -946,7 +960,12 @@ function getArenas(): { [any]: FollowArena }
 	local gamemodes = SpectatorGamemodes.listGamemodes()
 	for _, gamemode in gamemodes do
 		local slotId = gamemode:getSlotId()
-		if slotId:find("TKB") and not slotId:find("Driftplex") and not slotId:find("Full") then
+		if
+			slotId:find("TKB")
+			and not slotId:find("Driftplex")
+			and not slotId:find("Full")
+			and not slotId:find("Playground")
+		then
 			local arena: FollowArena = Arena3v3.new(gamemode, readLocation) :: Arena3v3
 			arenas[arena.name] = arena
 		elseif slotId:find("Soccer") then
@@ -1004,7 +1023,8 @@ local showQuests: boolean = profile.showQuests
 local cameraMode: number = profile.cameraMode
 local previousCameraMode: number = cameraMode
 local activeCameraMode: number = cameraMode
-local cameraModes = { "First Person", "Head Rotation", "Velocity Rotation", "Face the Ball", "Hand Held" }
+local cameraModes =
+	{ "First Person", "Head Rotation", "Velocity Rotation", "Face the Ball", "Follow Ball", "Hand Held" }
 local gestureModes = { "Head Rotation", "Velocity Rotation", "Face the Ball" }
 
 local cameraTransition: boolean = false
@@ -1169,10 +1189,6 @@ function main()
 end
 
 function onTransitionBegin()
-	if camera.isFollowed then
-		toggleSmoothing(false, false)
-	end
-
 	alwaysTick = true
 	WorldDraw.clear()
 
@@ -1390,7 +1406,9 @@ function playerSettings()
 	if listActive then
 		Gui.indent()
 		if Gui.beginListBox("Player List") then
-			for i = 1, #frame.players do
+			local playerAmount: number = #frame.players
+			local searchAmount: number = 0
+			for i = 1, playerAmount do
 				local player = frame.players[i]
 				local isSelected = false
 
@@ -1410,12 +1428,21 @@ function playerSettings()
 					continue
 				end
 
+				searchAmount += 1
+
 				if
 					Gui.selectable(tostring(player.playerName) .. "[" .. tostring(player.playerId) .. "]", isSelected)
 				then
 					setTargetPlayer(player)
 				end
 			end
+
+			if playerAmount == 0 then
+				Gui.selectable("No players found...", false)
+			elseif searchAmount == 0 then
+				Gui.selectable(`No players with a name like '{targetPlayerName}'...`, false)
+			end
+
 			Gui.endListBox()
 		end
 
@@ -2160,7 +2187,7 @@ function faceTheBallPivotPosition(playerBox: BoxType, ballPosition: Vec3): Quat
 	return rotation
 end
 
-function updateBallData(ball: ReplayBall, seconds: number)
+function updateBallData(ball: ReplayBall)
 	ballPosition = ball.transform.position
 	ballRotation = ball.transform.rotation
 	ballArena = ball.arena
@@ -2410,12 +2437,8 @@ function removeRoll(rotation: Quat, upDirection: Vec3): Quat
 	return Util.lookAt(Vec3.zeroVector, forward, upDirection)
 end
 
-function ballCam(radius: number)
-	if instaRotateBall then
-		toggleSmoothing(false, false)
-		instaRotateBall = false
-		doneOnceBall = true
-	else
+function ballCam(radius: number, offsetPosition: Vec3?)
+	if not cameraTransition then
 		toggleSmoothing(true, true)
 	end
 
@@ -2424,13 +2447,29 @@ function ballCam(radius: number)
 		ballCamRadius = 10
 	end
 
-	local rotation = velocityPivotPosition(ballVelocity)
+	local anchorOffset: Vec3 = Vec3.zeroVector
+	if offsetPosition ~= nil then
+		offsetPosition = gravity.upRotation:rotateVector(offsetPosition)
+		anchorOffset = offsetPosition
+	end
+
+	local rotation: Quat
+
+	local closestGoal: ArenaGoal = arena:getClosestGoalTransform(ballPosition)
+	local ballGoalDistance: number = closestGoal.box:clampPointToBox(ballPosition, false):distance(ballPosition)
+	if ballGoalDistance > 500 then
+		rotation = velocityPivotPosition(ballVelocity)
+		lastBallCamRotation = rotation
+	else
+		rotation = lastBallCamRotation
+	end
+
 	setCameraRotation(rotation)
 	hidePlayerHead = false
 
 	local direction = Util.negateVec3(rotation:getForwardVector())
 
-	setCameraPosition(ballPosition, Vec3.zeroVector, direction * radius * 10)
+	setCameraPosition(ballPosition, anchorOffset, direction * radius * 10)
 end
 
 function manualOrbit(position: Vec3, offset: Vec3)
@@ -2580,19 +2619,21 @@ function thirdPersonFacingBall(player: ReplayPlayer, offsetPosition: Vec3)
 		return
 	end
 
-	local horizontalVelocity = player.velocity - player.velocity:projectOnTo(gravity.upDirection)
+	local upDirection: Vec3 = player.root.rotation:getUpVector()
+
+	local horizontalVelocity = player.velocity - player.velocity:projectOnTo(upDirection)
 
 	local headForward = player.head.rotation:getForwardVector()
-	local alignedHeadDirection = headForward - gravity.upDirection * headForward:dot(gravity.upDirection)
+	local alignedHeadDirection = headForward - upDirection * headForward:dot(upDirection)
 	alignedHeadDirection = alignedHeadDirection:normalize()
 
 	local directionAlignment = playerChestRotation:getForwardVector():dot(alignedHeadDirection)
 
 	if directionAlignment >= -0.9 or directionAlignment <= 0.9 then
-		playerChestRotation = Quat.fromXZ(alignedHeadDirection, gravity.upDirection)
+		playerChestRotation = Quat.fromXZ(alignedHeadDirection, upDirection)
 	end
 
-	local verticalOffset = player.root.rotation:rotateVector(Vec3.new(0, 0, -50))
+	local verticalOffset = player.root.rotation:rotateVector(Vec3.new(0, 0, -25))
 	local horizontalOffset = playerChestRotation:getForwardVector()
 		* -math.clamp(
 			player.velocity:length() * math.sign(playerChestRotation:getForwardVector():dot(horizontalVelocity)),
@@ -2799,6 +2840,7 @@ function withPlayer(player: ReplayPlayer)
 
 	if previousCameraMode ~= activeCameraMode or previousTargetPlayerId ~= player.playerId then
 		toggleSmoothing(false, false)
+		toggleManualOrbit(false)
 		cameraTransition = true
 	elseif cameraTransition then
 		cameraTransition = false
@@ -2807,7 +2849,7 @@ function withPlayer(player: ReplayPlayer)
 	checkManualOrbitInput()
 
 	camera.fieldOfView = cameraFOV
-	if radius == 0 and cameraMode ~= CameraMode.HandHeld then
+	if radius == 0 and cameraMode ~= CameraMode.HandHeld and cameraMode ~= CameraMode.BallCam then
 		firstPerson()
 	elseif cameraMode == CameraMode.HeadRotation then
 		thirdPerson(headPosition, THIRD_PERSON_OFFSET + cameraPositionOffset, headRotation, true)
@@ -2819,6 +2861,8 @@ function withPlayer(player: ReplayPlayer)
 		else
 			thirdPerson(headPosition, THIRD_PERSON_OFFSET + cameraPositionOffset, headRotation, false)
 		end
+	elseif cameraMode == CameraMode.BallCam then
+		ballCam(radius)
 	elseif cameraMode == CameraMode.HandHeld then
 		handHeld(player)
 	else
@@ -2949,7 +2993,7 @@ function configureVOIP()
 end
 
 function drawBallOutline(ball: ReplayBall)
-	if isBallOutlineEnabled then
+	if not isBallOutlineEnabled then
 		return
 	end
 
@@ -3020,12 +3064,15 @@ function anchorCollision(anchorPosition: Vec3, anchorOffsetPosition: Vec3): Vec3
 	local anchor = anchorPosition + anchorOffsetPosition
 
 	if collisions and anchorOffsetPosition ~= Vec3.zeroVector then
-		local offsetForwards: Vec3 = Util.getForward(anchorPosition, anchorPosition + anchorOffsetPosition)
-		local rayEnd: Vec3 = anchorPosition + (offsetForwards * (anchorOffsetPosition:length() + 10))
+		local anchorOffsetLength: number = anchorOffsetPosition:length()
+		local offsetForwards: Vec3 = Util.getForward(anchorPosition, anchor)
+		local rayEnd: Vec3 = anchorPosition + (offsetForwards * (anchorOffsetLength + 10))
 		local hit: RayHit = camera:castRay(anchorPosition, rayEnd)
 
 		if hit.successful then
 			local hitDistance: number = Util.getDist(rayEnd, hit.position)
+			-- ensure the collision doesn't make the camera go further than the offset position.
+			hitDistance = math.min(hitDistance, anchorOffsetLength)
 			anchor += (offsetForwards * -hitDistance)
 		end
 	end
@@ -3043,11 +3090,13 @@ function moveCamera()
 
 	-- Collision
 	if collisions and cameraPivotOffset ~= Vec3.zeroVector then
+		local cameraPivotLength: number = cameraPivotOffset:length()
 		local cameraForwards = Util.getForward(anchor, cameraPosition)
 		local rayEnd: Vec3 = cameraPosition + (cameraForwards * 10)
 		local hit: RayHit = camera:castRay(anchor, rayEnd)
 		if hit.successful then
 			local hitDistance: number = Util.getDist(rayEnd, hit.position)
+			hitDistance = math.min(hitDistance, cameraPivotLength)
 			local radiusCm = radius * 10
 			local thresholdCm = threshold * 10
 			if radiusCm - hitDistance < thresholdCm then
@@ -3076,6 +3125,10 @@ function mainProcess(dt: number, followedBy: SpectatorCamera?)
 	end
 
 	local isFollowed: boolean = followedBy ~= nil
+	if not isFollowed and wasFollowed then
+		onStopFollow()
+	end
+	wasFollowed = isFollowed
 
 	if not camera.isActive and not isFollowed then
 		alwaysTick = nil
@@ -3137,7 +3190,7 @@ function mainProcess(dt: number, followedBy: SpectatorCamera?)
 	end
 
 	gravityUpDirection = targetPlayer.root.rotation:getUpVector()
-	updateBallData(ball, dt)
+	updateBallData(ball)
 	checkZDriftBallGrab(targetPlayer, ball)
 	withPlayer(targetPlayer)
 	advanceRecordingQueue()
@@ -3167,6 +3220,10 @@ function tick(dt)
 	mainProcess(dt)
 end
 
+function onStopFollow()
+	toggleManualOrbit(false)
+end
+
 function onExit()
 	camera.showNameTags = true
 	camera.hideNearestHead = false
@@ -3184,7 +3241,7 @@ end
 type FollowPlusData = {
 	-- Callbacks
 	versionCallback: (string) -> ()?,
-	getMainProcessCallback: ((number, SpectatorCamera) -> ()) -> ()?,
+	getMainProcessCallback: ((number, SpectatorCamera?) -> ()) -> ()?,
 	guiCallback: (() -> ()) -> ()?,
 	topSettingsCallback: (() -> ()) -> ()?,
 	checkboxSettingsCallback: (() -> ()) -> ()?,
@@ -3290,9 +3347,6 @@ function onMessageReceived(messageTable: FollowPlusData)
 	if not hasTickedOnce then
 		tick(0)
 	end
-
-	-- I set wasFollowed to true if a message was recieved to make sure the variables get reset once the camera is used standalone again
-	wasFollowed = true
 
 	-- showQuests is a boolean that shows quests for the followed player
 	if messageTable.showQuests ~= nil then
