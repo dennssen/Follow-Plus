@@ -652,13 +652,13 @@ local Arena4v4 = {} :: Arena4v4
 Arena4v4.__index = Arena4v4
 setmetatable(Arena4v4, { __index = FollowArena })
 
-Arena4v4.homeRotationOffset = Quat.fromEuler(0, 0, -90)
-Arena4v4.awayRotationOffset = Quat.fromEuler(0, 0, 90)
-Arena4v4.boxSize = Vec3.new(6110, 8400, 1490)
-Arena4v4.boxOffset = Vec3.new(0, 0, 600)
-Arena4v4.centerBoxOffset = Vec3.new(0, 0, 250)
-Arena4v4.goalBoxSize = Vec3.new(200, 450, 225)
-Arena4v4.goalPositionOffset = Vec3.new(4075, 0, 175)
+Arena4v4.homeRotationOffset = Quat.fromEuler(0, 0, 90)
+Arena4v4.awayRotationOffset = Quat.fromEuler(0, 0, -90)
+Arena4v4.boxSize = Vec3.new(6715, 8400, 1490)
+Arena4v4.boxOffset = Vec3.new(0, 0, 685)
+Arena4v4.centerBoxOffset = Vec3.new(0, 0, 435)
+Arena4v4.goalBoxSize = Vec3.new(165, 450, 225)
+Arena4v4.goalPositionOffset = Vec3.new(4085, 0, 270)
 
 function Arena4v4.new(gamemode: ModuleStateSpectatorLuaApi): FollowArena
 	local self: FollowArena = setmetatable(Arena.new(gamemode, readLocation), Arena4v4) :: any
