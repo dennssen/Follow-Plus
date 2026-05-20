@@ -978,7 +978,7 @@ function getArenas(): { [any]: FollowArena }
 		then
 			local arena: FollowArena = Arena4v4.new(gamemode, readLocation) :: Arena4v4
 			arenas[arena.name] = arena
-		elseif slotId:find("ZDrift") then
+		elseif slotId:lower():find("zdrift") then
 			local arena: FollowArena = ZDrift.new(gamemode, readLocation) :: ZDrift
 			arenas[arena.name] = arena
 		end
