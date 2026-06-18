@@ -1206,6 +1206,8 @@ function onTransitionBegin()
 		setCameraRotation(Util.lookAt(cameraPosition, orbitLookAt, Vec3.upVector))
 		setCameraPosition(orbitCenter, Vec3.zeroVector, Util.negateVec3(direction) * orbitRadius)
 	end
+
+	Emotes:setEmote(Emotes:getEmoteById(camera:getEmote()))
 end
 
 function generateAsterisk(guiLable: string, isEdited: boolean): string
