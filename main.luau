@@ -30,6 +30,8 @@ local Driftblitz = Gamemodes.Driftblitz
 type Driftblitz = Gamemodes.Driftblitz
 local ZDrift = Gamemodes.ZDrift
 type ZDrift = Gamemodes.ZDrift
+local Strike = Gamemodes.Strike
+type Strike = Gamemodes.Strike
 
 local HUD = require("hud")
 type HUD = HUD.HUD
@@ -446,6 +448,8 @@ function getArenas(): { [any]: FollowArena }
 	local gamemodes = SpectatorGamemodes.listGamemodes()
 	for _, gamemode in gamemodes do
 		local slotId = gamemode:getSlotId()
+		local fieldhouseSplit = slotId:split(" ")
+
 		if
 			slotId:find("TKB")
 			and not slotId:find("Driftplex")
@@ -467,6 +471,23 @@ function getArenas(): { [any]: FollowArena }
 		elseif slotId:lower():find("zdrift") then
 			local arena: FollowArena = ZDrift.new(gamemode, readLocation) :: ZDrift
 			arenas[arena.name] = arena
+		elseif fieldhouseSplit[1] == "FieldHouse" or slotId:find("Club HalfG") then
+			local number = tonumber(slotId:split(" ")[2])
+
+			if slotId == "Club HalfG 01" then
+				local arena: FollowArena = Strike.new(gamemode, readLocation)
+				arenas[arena.name] = arena
+				continue
+			end
+
+			if typeof(number) ~= "number" then
+				continue
+			end
+
+			if number >= 3 then
+				local arena: FollowArena = Strike.new(gamemode, readLocation)
+				arenas[arena.name] = arena
+			end
 		end
 	end
 
@@ -1399,10 +1420,26 @@ function debugSettings()
 			Gui.text("Ball Arena: " .. tostring(ballArena))
 			Gui.treePop()
 		end
-		if arena and Gui.treeNode("Arena") then
-			Gui.text("Arena Name: " .. arena.name)
-			Gui.text("Arena Position: " .. tostring(arena.transform.position))
-			Gui.text("Arena Rotation: " .. tostring(arena.transform.rotation:euler()))
+		if Gui.treeNode("Arenas") then
+			local arenaNumbers = {}
+			for _, arena in arenas do
+				if not arenaNumbers[arena.type] then
+					arenaNumbers[arena.type] = 0
+				end
+
+				arenaNumbers[arena.type] += 1
+			end
+
+			for arenaType, amount in arenaNumbers do
+				Gui.text(`{arenaType}: {amount}`)
+			end
+
+			if arena and Gui.treeNode("Arena") then
+				Gui.text("Arena Name: " .. arena.name)
+				Gui.text("Arena Position: " .. tostring(arena.transform.position))
+				Gui.text("Arena Rotation: " .. tostring(arena.transform.rotation:euler()))
+				Gui.treePop()
+			end
 			Gui.treePop()
 		end
 		if Gui.treeNode("VOIP") then
@@ -2208,6 +2245,11 @@ function handHeld(player: ReplayPlayer)
 end
 
 function checkForBallFollow(player: ReplayPlayer)
+	if not arena.home.goal or not arena.away.goal then
+		-- no goals in arena type
+		return
+	end
+
 	BallSim:tick()
 	local isInGoalInfo = BallSim:isInGoal()
 

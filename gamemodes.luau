@@ -44,7 +44,6 @@ export type Arena3v3 = FollowArena & {
 	awayRotationOffset: Quat,
 	boxSize: Vec3,
 	boxOffset: Vec3,
-	centerBoxOffset: Vec3,
 	goalBoxSize: Vec3,
 	goalPositionOffset: Vec3,
 	goalCamPositionOffset: Vec3,
@@ -65,7 +64,6 @@ Arena3v3.homeRotationOffset = Quat.fromEuler(0, 0, 90)
 Arena3v3.awayRotationOffset = Quat.fromEuler(0, 0, -90)
 Arena3v3.boxSize = Vec3.new(5100, 6750, 1440)
 Arena3v3.boxOffset = Vec3.new(0, 0, 650)
-Arena3v3.centerBoxOffset = Vec3.new(0, 0, 300)
 Arena3v3.goalBoxSize = Vec3.new(100, 500, 225)
 Arena3v3.goalPositionOffset = Vec3.new(3285, 0, 175)
 Arena3v3.goalCamPositionOffset = Vec3.new(3330, 0, 250)
@@ -202,8 +200,6 @@ end
 function Arena3v3:GUIChangeDimensions()
 	Arena3v3.boxSize = Gui.dragFloat3("Arena3v3 Arena Size", Arena3v3.boxSize, 1, -math.huge, math.huge)
 	Arena3v3.boxOffset = Gui.dragFloat3("Arena3v3 Position Offset", Arena3v3.boxOffset, 1, -math.huge, math.huge)
-	Arena3v3.centerBoxOffset =
-		Gui.dragFloat3("Arena3v3 Place Ball Box Position Offset", Arena3v3.centerBoxOffset, 1, -math.huge, math.huge)
 	Arena3v3.goalBoxSize = Gui.dragFloat3("Arena3v3 Goal Size", Arena3v3.goalBoxSize, 1, -math.huge, math.huge)
 	Arena3v3.goalPositionOffset =
 		Gui.dragFloat3("Arena3v3 Goal Position Offset", Arena3v3.goalPositionOffset, 1, -math.huge, math.huge)
@@ -211,7 +207,6 @@ function Arena3v3:GUIChangeDimensions()
 	if Gui.button("Print Dimensions") then
 		print(`boxSize: {Arena3v3.boxSize}`)
 		print(`boxOffset: {Arena3v3.boxOffset}`)
-		print(`centerBoxOffset: {Arena3v3.centerBoxOffset}`)
 		print(`goalBoxSize: {Arena3v3.goalBoxSize}`)
 		print(`goalPositionOffset: {Arena3v3.goalPositionOffset}`)
 	end
@@ -224,7 +219,6 @@ export type Arena4v4 = FollowArena & {
 	awayRotationOffset: Quat,
 	boxSize: Vec3,
 	boxOffset: Vec3,
-	centerBoxOffset: Vec3,
 	goalBoxSize: Vec3,
 	goalPositionOffset: Vec3,
 }
@@ -237,7 +231,6 @@ Arena4v4.homeRotationOffset = Quat.fromEuler(0, 0, 90)
 Arena4v4.awayRotationOffset = Quat.fromEuler(0, 0, -90)
 Arena4v4.boxSize = Vec3.new(6715, 8400, 1490)
 Arena4v4.boxOffset = Vec3.new(0, 0, 685)
-Arena4v4.centerBoxOffset = Vec3.new(0, 0, 435)
 Arena4v4.goalBoxSize = Vec3.new(165, 450, 225)
 Arena4v4.goalPositionOffset = Vec3.new(4085, 0, 270)
 
@@ -314,8 +307,6 @@ end
 function Arena4v4:GUIChangeDimensions()
 	Arena4v4.boxSize = Gui.dragFloat3("Arena4v4 Arena Size", Arena4v4.boxSize, 1, -math.huge, math.huge)
 	Arena4v4.boxOffset = Gui.dragFloat3("Arena4v4 Position Offset", Arena4v4.boxOffset, 1, -math.huge, math.huge)
-	Arena4v4.centerBoxOffset =
-		Gui.dragFloat3("Arena4v4 Place Ball Box Position Offset", Arena4v4.centerBoxOffset, 1, -math.huge, math.huge)
 	Arena4v4.goalBoxSize = Gui.dragFloat3("Arena4v4 Goal Size", Arena4v4.goalBoxSize, 1, -math.huge, math.huge)
 	Arena4v4.goalPositionOffset =
 		Gui.dragFloat3("Arena4v4 Goal Position Offset", Arena4v4.goalPositionOffset, 1, -math.huge, math.huge)
@@ -323,7 +314,6 @@ function Arena4v4:GUIChangeDimensions()
 	if Gui.button("Print Dimensions") then
 		print(`boxSize: {Arena4v4.boxSize}`)
 		print(`boxOffset: {Arena4v4.boxOffset}`)
-		print(`centerBoxOffset: {Arena4v4.centerBoxOffset}`)
 		print(`goalBoxSize: {Arena4v4.goalBoxSize}`)
 		print(`goalPositionOffset: {Arena4v4.goalPositionOffset}`)
 	end
@@ -336,7 +326,6 @@ export type Driftblitz = FollowArena & {
 	awayRotationOffset: Quat,
 	boxSize: Vec3,
 	boxOffset: Vec3,
-	centerBoxOffset: Vec3,
 	goalBoxSize: Vec3,
 	goalPositionOffset: Vec3,
 }
@@ -349,7 +338,6 @@ Driftblitz.homeRotationOffset = Quat.fromEuler(0, 0, 90)
 Driftblitz.awayRotationOffset = Quat.fromEuler(0, 0, -90)
 Driftblitz.boxSize = Vec3.new(7270, 11825, 1440)
 Driftblitz.boxOffset = Vec3.new(0, 0, 740)
-Driftblitz.centerBoxOffset = Vec3.new(0, 0, 100)
 Driftblitz.goalBoxSize = Vec3.new(100, 890, 300)
 Driftblitz.goalPositionOffset = Vec3.new(5295, 0, 175)
 
@@ -414,13 +402,6 @@ end
 function Driftblitz:GUIChangeDimensions()
 	Driftblitz.boxSize = Gui.dragFloat3("Driftblitz Arena Size", Driftblitz.boxSize, 1, -math.huge, math.huge)
 	Driftblitz.boxOffset = Gui.dragFloat3("Driftblitz Position Offset", Driftblitz.boxOffset, 1, -math.huge, math.huge)
-	Driftblitz.centerBoxOffset = Gui.dragFloat3(
-		"Driftblitz Place Ball Box Position Offset",
-		Driftblitz.centerBoxOffset,
-		1,
-		-math.huge,
-		math.huge
-	)
 	Driftblitz.goalBoxSize = Gui.dragFloat3("Driftblitz Goal Size", Driftblitz.goalBoxSize, 1, -math.huge, math.huge)
 	Driftblitz.goalPositionOffset =
 		Gui.dragFloat3("Driftblitz Goal Position Offset", Driftblitz.goalPositionOffset, 1, -math.huge, math.huge)
@@ -428,7 +409,6 @@ function Driftblitz:GUIChangeDimensions()
 	if Gui.button("Print Dimensions") then
 		print(`boxSize: {Driftblitz.boxSize}`)
 		print(`boxOffset: {Driftblitz.boxOffset}`)
-		print(`centerBoxOffset: {Driftblitz.centerBoxOffset}`)
 		print(`goalBoxSize: {Driftblitz.goalBoxSize}`)
 		print(`goalPositionOffset: {Driftblitz.goalPositionOffset}`)
 	end
@@ -441,7 +421,6 @@ export type ZDrift = FollowArena & {
 	awayRotationOffset: Quat,
 	boxSize: Vec3,
 	boxOffset: Vec3,
-	centerBoxOffset: Vec3,
 	goalBoxSize: Vec3,
 	goalPositionOffset: Vec3,
 }
@@ -454,7 +433,6 @@ ZDrift.homeRotationOffset = Quat.fromEuler(0, 0, 90)
 ZDrift.awayRotationOffset = Quat.fromEuler(0, 0, -90)
 ZDrift.boxSize = Vec3.new(7180, 17800, 1710)
 ZDrift.boxOffset = Vec3.new(0, 0, 880)
-ZDrift.centerBoxOffset = Vec3.new(0, 0, 500)
 ZDrift.goalBoxSize = Vec3.new(600, 600, 600)
 ZDrift.goalPositionOffset = Vec3.new(8200, 0, 585)
 
@@ -536,10 +514,79 @@ function ZDrift:GUIChangeDimensions()
 	self:setupDimensions()
 end
 
+export type Strike = FollowArena & {
+	boxSize: Vec3,
+	boxOffset: Vec3,
+}
+
+local Strike = {} :: Strike
+Strike.__index = Strike
+setmetatable(Strike, { __index = FollowArena })
+
+Strike.boxSize = Vec3.new(2050, 2050, 1050)
+Strike.boxOffset = Vec3.new(0, 0, 415)
+
+function Strike.new(gamemode: ModuleStateSpectatorLuaApi, readLocation: number): FollowArena
+	local self = setmetatable(FollowArena.new(gamemode, readLocation), Strike) :: any
+	self.type = "strike"
+
+	if self.slotId:find("FieldHouse") then
+		local split = self.slotId:split(" ")
+		local _, number = split[1], tonumber(split[2])
+		local patchedNumber = typeof(number) == "number" and tostring(number - 2) or split[2]
+
+		self.name = `Strike {patchedNumber}`
+	elseif self.slotId:find("HalfG") then
+		self.name = `Strike HalfG`
+	else
+		self.name = self.slotId
+	end
+
+	self:setupDimensions()
+	return self :: ZDrift
+end
+
+function Strike:isPointOnHomeSide(point: Vec3): boolean
+	-- There is no Home or Away
+	return true
+end
+
+function Strike:setupDimensions()
+	self.box = Box.new(
+		self.transform.position + self.transform.rotation:rotateVector(Strike.boxOffset),
+		Strike.boxSize,
+		self.transform.rotation
+	)
+end
+
+function Strike:getTeamRotation(teamIndex: number): Quat
+	return self.transform.rotation
+end
+
+function Strike:checkGoalCam(player: ReplayPlayer, goalMode: number): boolean
+	return false
+end
+
+function Strike:GUIChangeDimensions()
+	Strike.boxSize = Gui.dragFloat3("Strike Arena Size", Strike.boxSize, 1, -math.huge, math.huge)
+	Strike.boxOffset = Gui.dragFloat3("Strike Position Offset", Strike.boxOffset, 1, -math.huge, math.huge)
+	Strike.centerBoxOffset =
+		Gui.dragFloat3("Strike Place Ball Box Position Offset", Strike.centerBoxOffset, 1, -math.huge, math.huge)
+
+	if Gui.button("Print Dimensions") then
+		print(`boxSize: {Strike.boxSize}`)
+		print(`boxOffset: {Strike.boxOffset}`)
+		print(`centerBoxOffset: {Strike.centerBoxOffset}`)
+	end
+
+	self:setupDimensions()
+end
+
 return {
 	FollowArena = FollowArena,
 	Arena3v3 = Arena3v3,
 	Arena4v4 = Arena4v4,
 	Driftblitz = Driftblitz,
 	ZDrift = ZDrift,
+	Strike = Strike,
 }
