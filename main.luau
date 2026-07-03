@@ -3118,7 +3118,8 @@ end
 
 function rotateCamera()
 	local adjustedLookSmoothness = 1 - (1 - math.min(cameraRotationSmoothing, 0.99)) ^ 3
-	camera.rotation = Quat.slerp(camera.rotation, cameraRotation, math.min(adjustedLookSmoothness * deltaTime * 60, 1))
+	local t = adjustedLookSmoothness > 0 and math.min(adjustedLookSmoothness * deltaTime * 60, 1) or 1
+	camera.rotation = Quat.slerp(camera.rotation, cameraRotation, t)
 end
 
 function mainProcess(dt: number, followedBy: SpectatorCamera?)
