@@ -20,7 +20,7 @@ export type ArenaTeam<T = {}> = {
 	previousRoundsWon: number,
 	roundsWon: number,
 	roundsWonIncrease: boolean,
-	goal: ArenaGoal,
+	goal: ArenaGoal?,
 	players: { ReplayPlayer },
 	sizeChange: boolean,
 	data: T,
