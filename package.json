@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/AA-Franz/OD_SpectatorRegistry/refs/heads/main/src/package.schema.json",
   "author": "Dennssen",
   "displayName": "Follow Pluss",
   "name": "dennssen.followpluss",
@@ -8,8 +9,9 @@
     "pov",
     "framework",
     "follow player",
-    "guesture controls"
+    "gesture controls"
   ],
   "defaultKeybind": "F",
-  "main": "main.luau"
+  "main": "main.luau",
+  "url": "https://github.com/dennssen/Follow-Plus.git"
 }
